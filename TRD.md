@@ -16,7 +16,7 @@
 
 ## 3. 범위
 ### 3.1 포함 (MVP)
-- 인증(회원가입/로그인)
+- 인증: 제외 (사전 정의 테스트 페르소나 기반 시작)
 - 일일 퀘스트 3개 생성/완료
 - 경험치/재화 지급 및 레벨업
 - 출석/연속 기록/방지권 사용
@@ -59,8 +59,12 @@ flowchart LR
 
 ## 6. 도메인 모델
 ### 6.1 핵심 엔티티
+- TestPersona
+  - id, name, initialLevel, initialGold, initialStreak, initialStats, itemsPreset
+- UserSession
+  - personaId, sessionId, startedAt, lastActivityAt
 - User
-  - id, email, passwordHash, level, totalExp, gold, createdAt
+  - id, personaId, level, totalExp, gold, createdAt
 - HabitCategory
   - id, name
 - DailyQuest
@@ -125,11 +129,11 @@ flowchart LR
   - 참가상: 600 골드
 
 ## 8. API 요구사항 (초안)
-### 8.1 인증
-- POST /auth/signup
-- POST /auth/login
-- POST /auth/refresh
-- POST /auth/logout
+### 8.1 페르소나/세션 (인증 대체)
+- GET /personas (테스트 페르소나 목록 조회)
+- POST /session/start (페르소나 선택 및 세션 시작)
+- GET /session/current (현재 세션 정보 조회)
+- POST /session/end (세션 종료)
 
 ### 8.2 퀘스트
 - GET /quests/daily
@@ -229,12 +233,19 @@ flowchart LR
 - 상점 아이템/희귀도 가격표 시드
 - 시즌 테이블 초기 시즌 생성
 
-## 16. 오픈 이슈
+## 16. 테스트 페르소나 세션 정책
+- 페르소나 선택 시 해당 페르소나의 초기 상태 로드
+- 세션 중 변경사항(퀘스트 완료, 구매 등)은 메모리 또는 임시 저장소에 보관
+- 세션 종료 또는 새 페르소나 선택 시 변경사항 폐기
+- 페르소나 재선택 시 항상 초기 상태에서 시작
+- 멀티 탭/창 동시 접속: 마지막 활동 페르소나 기준
+
+## 17. 오픈 이슈
 - 주요 레벨 마일스톤의 정확한 레벨 구간값
 - 친구 랭킹의 친구 관계 모델(양방향/팔로우 기반)
 - 퀘스트 새로고침 티켓의 MVP 포함 여부 및 가격
 
-## 17. Phase 2 확장 포인트
+## 18. Phase 2 확장 포인트
 - AI 인증 세션 테이블, 대화 로그 테이블 추가
 - AI 난이도 제안 모델 입력 피처 설계
 - 모바일 앱(BFF 또는 동일 API) 호환 인터페이스 유지
