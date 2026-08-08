@@ -1,0 +1,225 @@
+// Prisma 스키마
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+// 테스트 페르소나 정의
+model TestPersona {
+  id              String   @id @default(cuid())
+  name            String
+  role            String   // 'beginner' | 'active' | 'advanced'
+  initialLevel    Int
+  initialGold     Int
+  initialStreak   Int
+  bestStreak      Int
+  totalQuestCompleted Int
+  monthlySuccessRate Int
+  createdAt       DateTime @default(now())
+  
+  @@map("test_personas")
+}
+
+// 사용자 세션
+model UserSession {
+  id              String   @id @default(cuid())
+  personaId       String
+  sessionId       String   @unique
+  startedAt       DateTime @default(now())
+  lastActivityAt  DateTime @updatedAt
+  
+  @@map("user_sessions")
+}
+
+// 사용자 (페르소나 기반)
+model User {
+  id              String   @id @default(cuid())
+  personaId       String
+  level           Int      @default(1)
+  totalExp        Int      @default(0)
+  gold            Int      @default(0)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+  
+  quests          DailyQuest[]
+  attendance      Attendance[]
+  streak          Streak?
+  inventory       Inventory[]
+  purchases       ShopPurchaseLog[]
+  pointLogs       RankingPointLog[]
+  rewards         SeasonRewardLog[]
+  
+  @@unique([personaId, id])
+  @@map("users")
+}
+
+// 습관 카테고리
+model HabitCategory {
+  id              String   @id @default(cuid())
+  name            String   @unique
+  emoji           String?
+  createdAt       DateTime @default(now())
+  
+  quests          DailyQuest[]
+  
+  @@map("habit_categories")
+}
+
+// 일일 퀘스트
+model DailyQuest {
+  id              String   @id @default(cuid())
+  userId          String
+  categoryId      String
+  questDateKst    String   // YYYY-MM-DD format, KST
+  difficulty      String   // 'easy' | 'normal' | 'hard'
+  title           String
+  description     String
+  status          String   @default("pending") // 'pending' | 'completed'
+  expReward       Int
+  goldReward      Int
+  slotNo          Int      // 0, 1, 2
+  completedAt     DateTime?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+  
+  user            User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  category        HabitCategory @relation(fields: [categoryId], references: [id])
+  completionLog   QuestCompletionLog[]
+  
+  @@unique([userId, questDateKst, slotNo])
+  @@index([userId, questDateKst])
+  @@map("daily_quests")
+}
+
+// 퀘스트 완료 로그
+model QuestCompletionLog {
+  id              String   @id @default(cuid())
+  userId          String
+  questId         String
+  expReward       Int
+  goldReward      Int
+  rankingPointAwarded Int @default(0)
+  createdAt       DateTime @default(now())
+  
+  quest           DailyQuest @relation(fields: [questId], references: [id], onDelete: Cascade)
+  
+  @@index([userId, createdAt])
+  @@map("quest_completion_logs")
+}
+
+// 출석 기록
+model Attendance {
+  id              String   @id @default(cuid())
+  userId          String
+  dateKst         String   // YYYY-MM-DD format, KST
+  checked         Boolean  @default(false)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+  
+  user            User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  @@unique([userId, dateKst])
+  @@index([userId, dateKst])
+  @@map("attendance")
+}
+
+// 연속 기록
+model Streak {
+  userId            String  @id
+  currentStreak     Int     @default(0)
+  bestStreak        Int     @default(0)
+  lastAttendanceDateKst String? // YYYY-MM-DD format
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+  
+  user              User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  @@map("streak")
+}
+
+// 인벤토리 아이템
+model Inventory {
+  id              String   @id @default(cuid())
+  userId          String
+  itemType        String   // 'protection_ticket' | 'cosmetic'
+  rarity          String?  // 'common' | 'rare' | 'epic' | 'legendary'
+  quantity        Int      @default(0)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+  
+  user            User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  @@unique([userId, itemType, rarity])
+  @@map("inventory")
+}
+
+// 상점 구매 로그
+model ShopPurchaseLog {
+  id              String   @id @default(cuid())
+  userId          String
+  itemType        String   // 'protection_ticket' | 'cosmetic'
+  priceGold       Int
+  quantity        Int      @default(1)
+  weekKeyKst      String   // YYYY-Www format (ISO week)
+  purchasedAt     DateTime @default(now())
+  
+  user            User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  @@index([userId, weekKeyKst, itemType])
+  @@map("shop_purchase_logs")
+}
+
+// 랭킹 시즌
+model RankingSeason {
+  id              String   @id @default(cuid())
+  yearMonth       String   @unique // YYYY-MM format
+  startAtKst      DateTime
+  endAtKst        DateTime
+  status          String   @default("active") // 'active' | 'closed' | 'archived'
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+  
+  pointLogs       RankingPointLog[]
+  rewards         SeasonRewardLog[]
+  
+  @@map("ranking_seasons")
+}
+
+// 랭킹 포인트 로그
+model RankingPointLog {
+  id              String   @id @default(cuid())
+  userId          String
+  seasonId        String
+  questId         String?
+  basePoint       Int      @default(10)
+  multiplier      Float    @default(1.0) // 난이도 배수
+  penaltyRate     Float    @default(0.0) // 감산율 (0-1)
+  finalPoint      Int      // 최종 포인트
+  createdAt       DateTime @default(now())
+  
+  user            User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  season          RankingSeason @relation(fields: [seasonId], references: [id], onDelete: Cascade)
+  
+  @@index([userId, seasonId, createdAt])
+  @@map("ranking_point_logs")
+}
+
+// 시즌 보상 로그
+model SeasonRewardLog {
+  id              String   @id @default(cuid())
+  userId          String
+  seasonId        String
+  percentileBand  String   // 'top1' | 'top10' | 'top30' | 'participation'
+  rewardType      String   // 'cosmetic' | 'gold' | 'title'
+  rewardValue     String   // 아이템명 또는 값
+  grantedAt       DateTime @default(now())
+  
+  user            User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  season          RankingSeason @relation(fields: [seasonId], references: [id], onDelete: Cascade)
+  
+  @@map("season_reward_logs")
+}

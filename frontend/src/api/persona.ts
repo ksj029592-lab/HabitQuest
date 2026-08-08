@@ -1,0 +1,29 @@
+/**
+ * 페르소나 API
+ */
+import { apiClient } from './client';
+import { TestPersona, UserSession, SelectPersonaRequest, ApiResponse } from '@types';
+
+export const personaApi = {
+  // 페르소나 목록 조회
+  getPersonas: async (): Promise<ApiResponse<TestPersona[]>> => {
+    return apiClient.get<TestPersona[]>('/personas');
+  },
+
+  // 페르소나 선택 및 세션 시작
+  selectPersona: async (personaId: string): Promise<ApiResponse<UserSession>> => {
+    return apiClient.post<UserSession>('/session/start', {
+      personaId,
+    } as SelectPersonaRequest);
+  },
+
+  // 현재 세션 정보 조회
+  getCurrentSession: async (): Promise<ApiResponse<UserSession>> => {
+    return apiClient.get<UserSession>('/session/current');
+  },
+
+  // 세션 종료
+  endSession: async (): Promise<ApiResponse<void>> => {
+    return apiClient.post<void>('/session/end');
+  },
+};

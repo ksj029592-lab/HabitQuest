@@ -1,0 +1,112 @@
+/**
+ * 전역 스타일 (Tailwind + Apple HIG)
+ */
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+* {
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+html, body, #root {
+  width: 100%;
+  height: 100%;
+  margin: 0;
+  padding: 0;
+  overflow: hidden;
+}
+
+body {
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, 'Helvetica Neue',
+    sans-serif;
+  background: #f5f5f5;
+}
+
+body.dark {
+  background: #000;
+}
+
+/* Apple HIG 색상 */
+:root {
+  --color-blue: #007aff;
+  --color-red: #ff3b30;
+  --color-green: #34c759;
+  --color-orange: #ff9500;
+  --color-yellow: #ffcc00;
+  --color-purple: #af52de;
+  --color-gray-1: #f2f2f7;
+  --color-gray-2: #e5e5ea;
+  --color-gray-3: #d1d1d6;
+  --color-gray-4: #c7c7cc;
+  --color-gray-5: #a9a9b0;
+  --color-gray-6: #8e8e93;
+}
+
+/* 스크롤바 스타일 */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #d1d1d6;
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #c7c7cc;
+}
+
+body.dark ::-webkit-scrollbar-thumb {
+  background: #5a5a5e;
+}
+
+body.dark ::-webkit-scrollbar-thumb:hover {
+  background: #69696d;
+}
+
+/* 해프틱 피드백 대체 */
+@supports (animation: pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite) {
+  button:active {
+    animation: tap-feedback 0.15s ease-out;
+  }
+}
+
+@keyframes tap-feedback {
+  0% {
+    opacity: 1;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 0.8;
+    transform: scale(0.98);
+  }
+  100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+/* 다크 모드 */
+@media (prefers-color-scheme: dark) {
+  body {
+    background: #000;
+    color: #fff;
+  }
+}
+
+/* 큰 터치 타겟 (최소 44pt × 44pt) */
+button,
+a,
+input[type='checkbox'],
+input[type='radio'] {
+  min-height: 44px;
+  min-width: 44px;
+}
