@@ -7,6 +7,7 @@ import { ScheduleModule } from '@nestjs/schedule';
 import { PrismaModule } from '@/prisma/prisma.module';
 import { PersonaModule } from '@/persona/persona.module';
 import { QuestModule } from '@/quest/quest.module';
+import { AiModule } from '@/ai/ai.module';
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
 
@@ -20,6 +21,7 @@ import { AppService } from './app.service';
     PrismaModule,
     PersonaModule,
     QuestModule,
+    AiModule,
   ],
   controllers: [AppController],
   providers: [AppService],
