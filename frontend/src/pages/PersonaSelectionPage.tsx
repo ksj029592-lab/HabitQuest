@@ -142,9 +142,23 @@ export const PersonaSelectionPage: React.FC = () => {
           </div>
         </section>
 
-        <button onClick={handleGenerate} disabled={habits.length === 0 || isGenerating} className="w-full rounded-xl bg-blue-500 hover:bg-blue-600 disabled:bg-gray-300 dark:disabled:bg-gray-800 text-white py-3 font-semibold transition-colors">
-          {isGenerating ? 'AI가 맞춤 퀘스트를 만드는 중...' : '맞춤 퀘스트 만들기'}
-        </button>
+        <div className="sticky bottom-0 -mx-2 px-2 pt-4 pb-2 bg-gray-50/95 dark:bg-gray-950/95 backdrop-blur-sm">
+          {habits.length > 0 && (
+            <p className="text-xs text-gray-500 dark:text-gray-400 text-center mb-2">
+              {habits.length}개 습관 선택됨{note.trim() ? ' • 맞춤 요청 입력됨' : ' • 자유 요청은 선택 사항'}
+            </p>
+          )}
+          <button
+            onClick={handleGenerate}
+            disabled={habits.length === 0 || isGenerating}
+            className="w-full rounded-xl bg-blue-500 hover:bg-blue-600 disabled:bg-gray-300 dark:disabled:bg-gray-800 disabled:text-gray-500 text-white py-3.5 font-bold shadow-lg transition-all active:scale-[0.99]"
+          >
+            {isGenerating ? 'AI가 맞춤 퀘스트를 만드는 중...' : '선택 완료하고 메인 화면으로 이동'}
+          </button>
+          {habits.length === 0 && (
+            <p className="text-xs text-center text-gray-400 mt-2">먼저 습관을 하나 이상 선택하세요.</p>
+          )}
+        </div>
       </div>
     </div>
   );
