@@ -112,7 +112,7 @@ export const PersonaSelector: React.FC<PersonaSelectorProps> = ({
   }
 
   return (
-    <div className="h-screen bg-gray-50 dark:bg-gray-950 flex flex-col overflow-hidden">
+    <div className="h-screen bg-gray-50 dark:bg-gray-950 flex flex-col overflow-y-scroll overscroll-y-contain">
       <div className="text-center px-6 py-12 flex-shrink-0">
         <h1 className="text-4xl font-bold text-black dark:text-white mb-3">HabitQuest</h1>
         <p className="text-gray-600 dark:text-gray-400">플레이할 페르소나를 선택하세요</p>

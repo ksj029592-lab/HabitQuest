@@ -108,8 +108,8 @@ export const PersonaSelectionPage: React.FC = () => {
   if (!selectedPersona) return <PersonaSelector onPersonaSelected={handlePersonaSelected} />;
 
   return (
-    <div className="min-h-screen bg-gray-50 dark:bg-gray-950 text-black dark:text-white px-6 py-10 overflow-y-auto">
-      <div className="max-w-md mx-auto space-y-6">
+    <div className="h-screen overflow-y-scroll overscroll-y-contain bg-gray-50 dark:bg-gray-950 text-black dark:text-white px-6 py-10">
+      <div className="max-w-md mx-auto space-y-6 pb-8">
         <button onClick={() => setSelectedPersona(null)} className="text-sm text-gray-500 hover:text-blue-500">← 페르소나 다시 선택</button>
         <div>
           <p className="text-sm text-blue-500 font-semibold mb-2">{selectedPersona.name}와 함께 시작하기</p>
