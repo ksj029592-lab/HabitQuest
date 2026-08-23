@@ -1,5 +1,5 @@
 /**
- * Apple HIG 기반 카드 컴포넌트
+ * Glassmorphism 카드 컴포넌트
  */
 import React from 'react';
 
@@ -13,8 +13,8 @@ export const Card = React.forwardRef<HTMLDivElement, CardProps>(
     return (
       <div
         ref={ref}
-        className={`rounded-2xl bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 p-6 shadow-sm ${
-          interactive ? 'hover:shadow-md transition-shadow cursor-pointer' : ''
+        className={`rounded-2xl bg-gradient-to-br from-white/15 to-white/5 backdrop-blur-xl border border-white/20 p-6 shadow-xl ${
+          interactive ? 'hover:shadow-2xl hover:bg-white/20 transition-all cursor-pointer' : ''
         } ${className}`}
         {...props}
       />

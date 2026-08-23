@@ -3,7 +3,7 @@
  */
 import React from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
-import { PersonaSelectionPage, HomePage } from '@pages';
+import { PersonaSelectionPage, HomePage, RankingPage } from '@pages';
 
 function App() {
   return (
@@ -11,6 +11,7 @@ function App() {
       <Routes>
         <Route path="/" element={<PersonaSelectionPage />} />
         <Route path="/home" element={<HomePage />} />
+        <Route path="/ranking" element={<RankingPage />} />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
     </Router>

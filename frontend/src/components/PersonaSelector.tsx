@@ -33,8 +33,14 @@ export const PersonaSelector: React.FC<PersonaSelectorProps> = ({
           totalQuestsCompleted: 0,
           monthlySuccessRate: 0,
         },
-        itemsPreset: [],
+        itemsPreset: [
+          { itemType: 'protection_ticket', quantity: 0, name: '방지권' },
+        ],
         role: 'beginner',
+        avatarIndex: 0,
+        equippedTitle: null,
+        equippedBorder: null,
+        protectionTickets: 0,
       },
       {
         id: 'active',
@@ -49,9 +55,13 @@ export const PersonaSelector: React.FC<PersonaSelectorProps> = ({
         },
         itemsPreset: [
           { itemType: 'protection_ticket', quantity: 2, name: '방지권' },
-          { itemType: 'cosmetic', rarity: 'rare', quantity: 1, name: '프로필 테두리' },
+          { itemType: 'cosmetic', rarity: 'rare', quantity: 1, name: '금색 테두리' },
         ],
         role: 'active',
+        avatarIndex: 2,
+        equippedTitle: '부지런한',
+        equippedBorder: '금색 테두리',
+        protectionTickets: 2,
       },
       {
         id: 'advanced',
@@ -66,9 +76,13 @@ export const PersonaSelector: React.FC<PersonaSelectorProps> = ({
         },
         itemsPreset: [
           { itemType: 'protection_ticket', quantity: 3, name: '방지권' },
-          { itemType: 'cosmetic', rarity: 'legendary', quantity: 1, name: '전설 테두리' },
+          { itemType: 'cosmetic', rarity: 'legendary', quantity: 1, name: '무지개 테두리' },
         ],
         role: 'advanced',
+        avatarIndex: 4,
+        equippedTitle: '전설의',
+        equippedBorder: '무지개 테두리',
+        protectionTickets: 3,
       },
     ];
 
@@ -98,13 +112,14 @@ export const PersonaSelector: React.FC<PersonaSelectorProps> = ({
   }
 
   return (
-    <div className="flex flex-col items-center justify-start min-h-screen bg-gray-50 dark:bg-gray-950 px-6 py-12">
-      <div className="mb-12 text-center">
+    <div className="h-screen bg-gray-50 dark:bg-gray-950 flex flex-col overflow-hidden">
+      <div className="text-center px-6 py-12 flex-shrink-0">
         <h1 className="text-4xl font-bold text-black dark:text-white mb-3">HabitQuest</h1>
         <p className="text-gray-600 dark:text-gray-400">플레이할 페르소나를 선택하세요</p>
       </div>
 
-      <div className="w-full max-w-md space-y-4 mb-12">
+      <div className="flex-1 overflow-y-auto px-6 pb-12">
+        <div className="w-full max-w-md mx-auto space-y-4">
         {personas.map((persona) => (
           <Card
             key={persona.id}
@@ -152,33 +167,53 @@ export const PersonaSelector: React.FC<PersonaSelectorProps> = ({
                 </div>
               </div>
 
-              {persona.itemsPreset.length > 0 && (
-                <div className="pt-4 border-t border-gray-200 dark:border-gray-800">
-                  <p className="text-xs text-gray-600 dark:text-gray-400 mb-2">보유 아이템</p>
-                  <div className="flex flex-wrap gap-2">
-                    {persona.itemsPreset.map((item, idx) => (
-                      <span
-                        key={idx}
-                        className="inline-block px-3 py-1 bg-blue-100 dark:bg-blue-900 text-blue-800 dark:text-blue-200 text-xs rounded-full"
-                      >
-                        {item.name} ×{item.quantity}
-                      </span>
-                    ))}
+              <div className="pt-4 border-t border-gray-200 dark:border-gray-800">
+                <p className="text-xs text-gray-600 dark:text-gray-400 mb-3">보유 아이템 & 착용 중</p>
+                <div className="space-y-2">
+                  <div className="flex justify-between items-center text-sm">
+                    <span className="text-gray-700 dark:text-gray-300">🛡️ 방지권</span>
+                    <span className="font-semibold text-blue-500">{persona.protectionTickets}개</span>
                   </div>
+                  {persona.equippedTitle && (
+                    <div className="flex justify-between items-center text-sm">
+                      <span className="text-gray-700 dark:text-gray-300">🏅 칭호</span>
+                      <span className="font-semibold text-purple-500">{persona.equippedTitle}</span>
+                    </div>
+                  )}
+                  {persona.equippedBorder && (
+                    <div className="flex justify-between items-center text-sm">
+                      <span className="text-gray-700 dark:text-gray-300">🎨 테두리</span>
+                      <span className="font-semibold text-emerald-500">{persona.equippedBorder}</span>
+                    </div>
+                  )}
                 </div>
-              )}
+              </div>
             </div>
           </Card>
         ))}
+        </div>
       </div>
 
-      <Button
-        size="large"
-        disabled={!selectedPersona}
-        className="w-full max-w-md"
-      >
-        {selectedPersona ? '게임 시작' : '페르소나를 선택하세요'}
-      </Button>
+      <div className="flex-shrink-0 px-6 py-6 bg-gray-50 dark:bg-gray-950">
+        <button
+          onClick={() => {
+            if (selectedPersona) {
+              const persona = personas.find((p) => p.id === selectedPersona);
+              if (persona) {
+                onPersonaSelected(persona);
+              }
+            }
+          }}
+          disabled={!selectedPersona}
+          className={`w-full px-6 py-3 rounded-xl font-semibold transition-colors ${
+            selectedPersona
+              ? 'bg-blue-500 hover:bg-blue-600 text-white cursor-pointer active:scale-95 transform'
+              : 'bg-gray-300 dark:bg-gray-700 text-gray-500 dark:text-gray-400 cursor-not-allowed'
+          }`}
+        >
+          {selectedPersona ? '게임 시작' : '페르소나를 선택하세요'}
+        </button>
+      </div>
     </div>
   );
 };
