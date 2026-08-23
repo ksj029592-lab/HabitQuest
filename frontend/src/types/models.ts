@@ -16,6 +16,10 @@ export interface TestPersona {
   };
   itemsPreset: InventoryItem[];
   role: 'beginner' | 'active' | 'advanced';
+  avatarIndex: number;
+  equippedTitle: string | null;
+  equippedBorder: string | null;
+  protectionTickets: number;
 }
 
 /** 사용자 세션 */
@@ -38,6 +42,11 @@ export interface PersonaGameState {
   attendance: AttendanceData;
   inventory: InventoryItem[];
   stats: UserStats;
+  seasonRankingPoints?: number;
+  avatarIndex?: number;
+  equippedTitle?: string | null;
+  equippedBorder?: string | null;
+  equippedDecoration?: string | null;
 }
 
 /** 연속 달성 데이터 */
@@ -58,7 +67,7 @@ export interface AttendanceData {
 
 /** 인벤토리 아이템 */
 export interface InventoryItem {
-  itemType: 'protection_ticket' | 'cosmetic';
+  itemType: 'protection_ticket' | 'reroll_ticket' | 'cosmetic';
   rarity?: 'common' | 'rare' | 'epic' | 'legendary';
   quantity: number;
   name: string;
@@ -100,7 +109,7 @@ export interface HabitCategory {
 export interface ShopItem {
   id: string;
   name: string;
-  itemType: 'protection_ticket' | 'cosmetic';
+  itemType: 'protection_ticket' | 'reroll_ticket' | 'cosmetic';
   price: number;
   rarity?: 'common' | 'rare' | 'epic' | 'legendary';
   description: string;

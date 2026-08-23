@@ -1,0 +1,28 @@
+services:
+  backend:
+    build:
+      context: ./backend
+    environment:
+      NODE_ENV: production
+      PORT: 3001
+      FRONTEND_URL: http://localhost:8080
+      DATABASE_URL: ${DATABASE_URL:-postgresql://localhost:5432/habitquest}
+      JWT_SECRET: ${JWT_SECRET:?Set JWT_SECRET in the shell or a local .env file}
+      JWT_EXPIRATION: ${JWT_EXPIRATION:-7d}
+    expose:
+      - "3001"
+    restart: unless-stopped
+
+  frontend:
+    build:
+      context: ./frontend
+      args:
+        VITE_API_BASE_URL: /api
+    environment:
+      BACKEND_URL: http://backend:3001
+    ports:
+      - "8081:80"
+    depends_on:
+      backend:
+        condition: service_healthy
+    restart: unless-stopped
