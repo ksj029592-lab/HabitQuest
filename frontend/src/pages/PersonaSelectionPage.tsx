@@ -108,7 +108,7 @@ export const PersonaSelectionPage: React.FC = () => {
   if (!selectedPersona) return <PersonaSelector onPersonaSelected={handlePersonaSelected} />;
 
   return (
-    <div className="h-screen overflow-y-scroll overscroll-y-contain bg-gray-50 dark:bg-gray-950 text-black dark:text-white px-6 py-10">
+    <div className="h-screen overflow-y-scroll overscroll-y-contain bg-gray-50 dark:bg-gray-950 text-black dark:text-white px-6 py-10 pb-32">
       <div className="max-w-md mx-auto space-y-6 pb-8">
         <button onClick={() => setSelectedPersona(null)} className="text-sm text-gray-500 hover:text-blue-500">← 페르소나 다시 선택</button>
         <div>
@@ -142,7 +142,8 @@ export const PersonaSelectionPage: React.FC = () => {
           </div>
         </section>
 
-        <div className="sticky bottom-0 -mx-2 px-2 pt-4 pb-2 bg-gray-50/95 dark:bg-gray-950/95 backdrop-blur-sm">
+        <div className="fixed bottom-0 left-0 right-0 z-50 border-t border-gray-200 dark:border-gray-800 bg-gray-50/95 dark:bg-gray-950/95 px-6 pt-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] backdrop-blur-md shadow-[0_-8px_24px_rgba(0,0,0,0.08)]">
+          <div className="max-w-md mx-auto">
           {habits.length > 0 && (
             <p className="text-xs text-gray-500 dark:text-gray-400 text-center mb-2">
               {habits.length}개 습관 선택됨{note.trim() ? ' • 맞춤 요청 입력됨' : ' • 자유 요청은 선택 사항'}
@@ -158,6 +159,7 @@ export const PersonaSelectionPage: React.FC = () => {
           {habits.length === 0 && (
             <p className="text-xs text-center text-gray-400 mt-2">먼저 습관을 하나 이상 선택하세요.</p>
           )}
+          </div>
         </div>
       </div>
     </div>
