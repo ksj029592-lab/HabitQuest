@@ -45,7 +45,7 @@ export const PersonaSelectionPage: React.FC = () => {
         console.error('AI quest generation failed; HomePage fallback will be used:', error);
       }
 
-        // Mock 세션 생성 (백엔드 없이 테스트)
+        // Mock 세션 생성 (사용자 요구사항 userPreferences 포함)
       const mockSession: UserSession = {
           sessionId: `session_${Date.now()}`,
           personaId: selectedPersona.id,
@@ -95,6 +95,12 @@ export const PersonaSelectionPage: React.FC = () => {
             equippedTitle: selectedPersona.equippedTitle,
             equippedBorder: selectedPersona.equippedBorder,
             avatarIndex: selectedPersona.avatarIndex,
+            userPreferences: {
+              habits,
+              note,
+              difficulty,
+            },
+            totalAttendanceDays: selectedPersona.initialStreak > 0 ? selectedPersona.initialStreak : 1,
           },
         };
         

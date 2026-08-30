@@ -1,50 +1,49 @@
 /**
- * HabitQuest - HomePage (100배 개선 Premium Glassmorphism UI)
+ * HabitQuest - HomePage (AI-IDEA1 반영: 상단 헤더 통합, AvatarFrame 시각화, 사진 업로드, 요구사항 기반 AI 리롤)
  */
-import React, { useState, useCallback, useEffect } from 'react';
+import React, { useState, useCallback, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Header, TabBar, QuestCard, Button } from '@components';
+import { Header, TabBar, QuestCard, Button, AvatarFrame } from '@components';
 import { useSessionStore, useQuestStore } from '@store';
-import { questApi } from '@api';
+import { questApi, aiApi } from '@api';
 
 type TabId = 'quests' | 'stats' | 'shop' | 'profile' | 'ranking';
 
-// ============= 상수 및 테스트 데이터 =============
-const PERSONAS = [
-  {
-    id: 'beginner',
-    name: '초심자',
-    avatarIndex: 0,
-    initialLevel: 1,
-    initialGold: 500,
-    baseScore: 120,
-  },
-  {
-    id: 'active',
-    name: '활발한 사용자',
-    avatarIndex: 1,
-    initialLevel: 5,
-    initialGold: 1000,
-    baseScore: 340,
-  },
-  {
-    id: 'advanced',
-    name: '고도화된 사용자',
-    avatarIndex: 2,
-    initialLevel: 10,
-    initialGold: 2000,
-    baseScore: 580,
-  },
-];
-
-const AVATARS = ['🧑‍💻', '👨‍💼', '👩‍🎨', '🧔', '👩‍🚀', '👨‍🎓', '🦸‍♂️', '🧙‍♀️'];
-
+// ============= 상점 품목 카탈로그 =============
 const PROFILE_DECORATIONS = [
   { id: 'aura', name: '신성한 후광', price: 300, rarity: 'rare' as const, emoji: '✨' },
   { id: 'crown', name: '왕관', price: 500, rarity: 'epic' as const, emoji: '👑' },
   { id: 'wings', name: '천사의 날개', price: 400, rarity: 'rare' as const, emoji: '🪽' },
   { id: 'flame', name: '전설의 불꽃', price: 350, rarity: 'rare' as const, emoji: '🔥' },
 ];
+
+const BORDER_ITEMS = [
+  { id: 'gold_ring', name: '황금 링', price: 400, rarity: 'rare' as const, desc: '빛나는 황금 테두리' },
+  { id: 'fire_ring', name: '불꽃 링', price: 500, rarity: 'epic' as const, desc: '타오르는 불꽃 테두리' },
+  { id: 'cyber_ring', name: '사이버 네온 링', price: 600, rarity: 'epic' as const, desc: '네온 사이버 테두리' },
+  { id: 'crystal_ring', name: '크리스탈 링', price: 800, rarity: 'legendary' as const, desc: '신비로운 크리스탈 테두리' },
+];
+
+const SPECIAL_AVATAR_ITEMS = [
+  { id: 'warrior', name: '🌟 갓생 전사', price: 500, rarity: 'rare' as const },
+  { id: 'fox', name: '🦊 럭키 포인터', price: 600, rarity: 'epic' as const },
+  { id: 'astronaut', name: '🚀 스페이스 탐험가', price: 700, rarity: 'epic' as const },
+  { id: 'dragon', name: '🐉 드래곤 마스터', price: 1000, rarity: 'legendary' as const },
+];
+
+const getBorderByInventoryName = (name: string) =>
+  BORDER_ITEMS.find((item) => name === `border_${item.id}` || name === item.name) ||
+  (/테두리|링/.test(name) ? { id: name, name } : undefined);
+
+const isDecorationInventoryName = (name: string) =>
+  PROFILE_DECORATIONS.some((item) => item.id === name);
+
+const isAvatarInventoryName = (name: string) => name.startsWith('avatar_');
+
+const isBorderInventoryName = (name: string) => Boolean(getBorderByInventoryName(name));
+
+const isTitleInventoryName = (name: string) =>
+  !isAvatarInventoryName(name) && !isBorderInventoryName(name) && !isDecorationInventoryName(name);
 
 const MOCK_DAILY_QUESTS = [
   {
@@ -91,19 +90,17 @@ const MOCK_DAILY_QUESTS = [
   },
 ];
 
-// 🎲 리롤용 전체 퀘스트 풀
 const ALL_QUEST_POOL = [
   { id: 'q_water', title: '💧 아침 물 한 잔 마시기', description: '기상 후 깨끗한 물 한 잔으로 활력을 찾으세요.', category: 'health', difficulty: 'easy' as const, expReward: 100, goldReward: 50, status: 'pending' as const },
   { id: 'q_run', title: '🏃 30분 유산소 운동하기', description: '가벼운 조깅이나 산책으로 몸을 움직여보세요.', category: 'fitness', difficulty: 'normal' as const, expReward: 150, goldReward: 100, status: 'pending' as const },
   { id: 'q_read', title: '📚 책 15페이지 읽기', description: '매일 조금씩 지식을 쌓고 마음의 양식을 키우세요.', category: 'learning', difficulty: 'normal' as const, expReward: 150, goldReward: 100, status: 'pending' as const },
   { id: 'q_meditate', title: '🧘 10분 마음 명상하기', description: '지친 마음을 달래는 조용한 나만의 시간을 가져보세요.', category: 'mindset', difficulty: 'easy' as const, expReward: 100, goldReward: 50, status: 'pending' as const },
   { id: 'q_clean', title: '🧹 책상/방 깨끗이 정돈하기', description: '주변 환경을 깔끔하게 정리해 집중력을 높이세요.', category: 'lifestyle', difficulty: 'easy' as const, expReward: 100, goldReward: 50, status: 'pending' as const },
-  { id: 'q_stretch', title: '🤸 전신 스트레칭 수행하기', description: '굳은 몸을 가볍게 풀고 스트레스를 완화하세요.', category: 'health', difficulty: 'easy' as const, expReward: 100, goldReward: 50, status: 'pending' as const },
-  { id: 'q_journal', title: '✍️ 감사 일기 3줄 작성하기', description: '오늘 하루 감사했던 일들을 기록하며 긍정 에너지를 채우세요.', category: 'mindset', difficulty: 'easy' as const, expReward: 120, goldReward: 60, status: 'pending' as const },
 ];
 
 export const HomePage: React.FC = () => {
   const navigate = useNavigate();
+  const fileInputRef = useRef<HTMLInputElement>(null);
   const session = useSessionStore((state) => state.session);
   const updateGameState = useSessionStore((state) => state.updateGameState);
   const clearSession = useSessionStore((state) => state.clearSession);
@@ -116,7 +113,6 @@ export const HomePage: React.FC = () => {
   // Local State
   const [activeTab, setActiveTab] = useState<TabId>('quests');
   const [loading, setLoading] = useState<boolean>(true);
-  const [error, setError] = useState<string | null>(null);
   const [completingQuestId, setCompletingQuestId] = useState<string | null>(null);
   const [modalAlert, setModalAlert] = useState<{ title: string; message: string; emoji?: string } | null>(null);
 
@@ -131,18 +127,40 @@ export const HomePage: React.FC = () => {
   useEffect(() => {
     let isMounted = true;
     const loadQuests = async () => {
+      const existingQuests = useQuestStore.getState().quests;
+      if (existingQuests && existingQuests.length > 0) {
+        if (isMounted) setLoading(false);
+        return;
+      }
+
       try {
         setLoading(true);
         const response = await questApi.getDailyQuests();
-        if (isMounted && response.success && response.data && response.data.length > 0) {
+        if (isMounted && response.success && Array.isArray(response.data) && response.data.length > 0) {
           setQuests(response.data);
-        } else if (isMounted) {
+          return;
+        }
+
+        const prefs = session?.personaData?.userPreferences;
+        const personaName = session?.personaData?.persona?.name || '초심자';
+        const aiResponse = await aiApi.generateQuests({
+          personaName,
+          habits: prefs?.habits?.length ? prefs.habits : ['건강 관리', '독서와 학습', '마음 챙김'],
+          note: prefs?.note || '오늘의 맞춤 퀘스트',
+          difficulty: prefs?.difficulty || 'normal',
+        });
+
+        if (isMounted && aiResponse.success && aiResponse.data && aiResponse.data.length > 0) {
+          setQuests(aiResponse.data);
+          return;
+        }
+
+        if (isMounted) {
           setQuests(MOCK_DAILY_QUESTS);
         }
       } catch (err) {
         if (isMounted) {
           setQuests(MOCK_DAILY_QUESTS);
-          setError(null);
         }
         console.error('Quest loading error, falling back to mock quests:', err);
       } finally {
@@ -154,7 +172,7 @@ export const HomePage: React.FC = () => {
     return () => {
       isMounted = false;
     };
-  }, [setQuests]);
+  }, [session, setQuests]);
 
   if (!session) {
     return null;
@@ -165,27 +183,22 @@ export const HomePage: React.FC = () => {
   const completedQuests = quests.filter((q) => q.status === 'completed');
   const completedCount = completedQuests.length;
 
-  // 퀘스트 완료 처리 핸들러 (Bug #1 & #2 해결)
+  // 퀘스트 완료 처리
   const handleCompleteQuest = useCallback(
     (questId: string) => {
       try {
         setCompletingQuestId(questId);
 
-        // 1. Quests 상태 즉시 업데이트
         const updatedQuests = quests.map((q) =>
           q.id === questId ? { ...q, status: 'completed' as const } : q
         );
         setQuests(updatedQuests);
 
         const newCompletedCount = updatedQuests.filter((q) => q.status === 'completed').length;
-
-        // 2. 최신 Zustand 상태 가져오기
         const currentSession = useSessionStore.getState().session;
         if (!currentSession) return;
 
         const currentPersonaData = currentSession.personaData;
-
-        // 3. 보상 및 경험치 계산
         const questExp = 100;
         const questGold = 50;
         const currentExp = currentPersonaData.totalExp || 0;
@@ -201,7 +214,7 @@ export const HomePage: React.FC = () => {
             totalQuestsCompleted: (currentPersonaData.stats?.totalQuestsCompleted || 0) + 1,
             monthlySuccessRate: Math.min(
               100,
-              Math.round(((newCompletedCount / (updatedQuests.length || 1)) * 100))
+              Math.round((newCompletedCount / (updatedQuests.length || 1)) * 100)
             ),
           },
           seasonRankingPoints: (currentPersonaData.seasonRankingPoints || 0) + 15,
@@ -216,7 +229,6 @@ export const HomePage: React.FC = () => {
           });
         }
 
-        // Bug #2: 3번째 퀘스트 완료 시 연속(Streak) 증가
         if (newCompletedCount >= 3) {
           const currentStreakVal = currentPersonaData.streak?.currentStreak || 0;
           const newCurrentStreak = currentStreakVal + 1;
@@ -239,7 +251,6 @@ export const HomePage: React.FC = () => {
         }
 
         updateGameState(stateUpdate);
-
         setTimeout(() => setCompletingQuestId(null), 1200);
       } catch (err) {
         console.error('Quest completion error:', err);
@@ -249,7 +260,152 @@ export const HomePage: React.FC = () => {
     [quests, setQuests, updateGameState]
   );
 
-  // 상점 장식 구매 핸들러
+  // 📷 사용자가 컴퓨터 파일/카메라 사진을 선택했을 때 실행되는 핸들러
+  const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    if (!file.type.startsWith('image/')) {
+      setModalAlert({
+        title: '형식 오류',
+        message: '이미지 파일만 선택할 수 있습니다.',
+        emoji: '⚠️',
+      });
+      return;
+    }
+
+    const reader = new FileReader();
+    reader.onload = () => {
+      const dataUrl = reader.result as string;
+      updateGameState({
+        avatarUrl: dataUrl,
+        avatarType: 'custom_image',
+        specialAvatarId: null,
+      });
+      setModalAlert({
+        title: '프로필 사진 변경 완료!',
+        message: '새로운 사진이 아바타에 적용되었습니다. ✨',
+        emoji: '📷',
+      });
+    };
+    reader.readAsDataURL(file);
+  };
+
+  // 🌟 특별 아바타 구매/장착 핸들러
+  const handleBuySpecialAvatar = useCallback(
+    (avatarId: string) => {
+      const item = SPECIAL_AVATAR_ITEMS.find((a) => a.id === avatarId);
+      if (!item) return;
+
+      const currentSession = useSessionStore.getState().session;
+      if (!currentSession) return;
+      const currentPersonaData = currentSession.personaData;
+      const currentGold = currentPersonaData.gold || 0;
+
+      const currentInventory = currentPersonaData.inventory || [];
+      const hasItem = currentInventory.some(
+        (i) => i.itemType === 'cosmetic' && i.name === `avatar_${avatarId}`
+      );
+
+      if (!hasItem) {
+        if (currentGold < item.price) {
+          setModalAlert({
+            title: '골드 부족',
+            message: `${item.name}을(를) 구매하려면 ${item.price} 💰가 필요합니다.`,
+            emoji: '💸',
+          });
+          return;
+        }
+
+        const newInventory = [
+          ...currentInventory,
+          {
+            itemType: 'cosmetic' as const,
+            name: `avatar_${avatarId}`,
+            rarity: item.rarity,
+            quantity: 1,
+          },
+        ];
+
+        updateGameState({
+          gold: currentGold - item.price,
+          inventory: newInventory,
+        });
+
+        setModalAlert({
+          title: '구매 완료!',
+          message: `${item.name} 아바타를 인벤토리에 보관했습니다. 프로필에서 장착할 수 있습니다.`,
+          emoji: '✨',
+        });
+      } else {
+        setModalAlert({
+          title: '이미 보유 중',
+          message: '프로필 탭의 인벤토리에서 장착하거나 해제할 수 있습니다.',
+          emoji: '🎒',
+        });
+      }
+    },
+    [updateGameState]
+  );
+
+  // 🎨 테두리(Border) 구매/장착 핸들러
+  const handleBuyBorder = useCallback(
+    (borderId: string) => {
+      const item = BORDER_ITEMS.find((b) => b.id === borderId);
+      if (!item) return;
+
+      const currentSession = useSessionStore.getState().session;
+      if (!currentSession) return;
+      const currentPersonaData = currentSession.personaData;
+      const currentGold = currentPersonaData.gold || 0;
+
+      const currentInventory = currentPersonaData.inventory || [];
+      const hasItem = currentInventory.some(
+        (i) => i.itemType === 'cosmetic' && i.name === `border_${borderId}`
+      );
+
+      if (!hasItem) {
+        if (currentGold < item.price) {
+          setModalAlert({
+            title: '골드 부족',
+            message: `${item.name}을(를) 구매하려면 ${item.price} 💰가 필요합니다.`,
+            emoji: '💸',
+          });
+          return;
+        }
+
+        const newInventory = [
+          ...currentInventory,
+          {
+            itemType: 'cosmetic' as const,
+            name: `border_${borderId}`,
+            rarity: item.rarity,
+            quantity: 1,
+          },
+        ];
+
+        updateGameState({
+          gold: currentGold - item.price,
+          inventory: newInventory,
+        });
+
+        setModalAlert({
+          title: '구매 완료!',
+          message: `${item.name}을(를) 인벤토리에 보관했습니다. 프로필에서 장착할 수 있습니다.`,
+          emoji: '🎨',
+        });
+      } else {
+        setModalAlert({
+          title: '이미 보유 중',
+          message: '프로필 탭의 인벤토리에서 장착하거나 해제할 수 있습니다.',
+          emoji: '🎒',
+        });
+      }
+    },
+    [updateGameState]
+  );
+
+  // 👑 프로필 장식 구매/장착 핸들러
   const handleBuyDecoration = useCallback(
     (decorationId: string) => {
       const decoration = PROFILE_DECORATIONS.find((d) => d.id === decorationId);
@@ -260,53 +416,102 @@ export const HomePage: React.FC = () => {
 
       const currentPersonaData = currentSession.personaData;
       const currentGold = currentPersonaData.gold || 0;
-
-      if (currentGold < decoration.price) {
-        setModalAlert({
-          title: '골드 부족',
-          message: `${decoration.name}을(를) 구매하려면 ${decoration.price} 💰가 필요합니다.`,
-          emoji: '💸',
-        });
-        return;
-      }
-
       const currentInventory = currentPersonaData.inventory || [];
-      const existingItem = currentInventory.find(
+      const hasItem = currentInventory.some(
         (i) => i.itemType === 'cosmetic' && i.name === decoration.id
       );
 
-      const newInventory = existingItem
-        ? currentInventory.map((i) =>
-            i.itemType === 'cosmetic' && i.name === decoration.id
-              ? { ...i, quantity: (i.quantity || 1) + 1 }
-              : i
-          )
-        : [
-            ...currentInventory,
-            {
-              itemType: 'cosmetic' as const,
-              name: decoration.id,
-              rarity: decoration.rarity,
-              quantity: 1,
-            },
-          ];
+      if (!hasItem) {
+        if (currentGold < decoration.price) {
+          setModalAlert({
+            title: '골드 부족',
+            message: `${decoration.name}을(를) 구매하려면 ${decoration.price} 💰가 필요합니다.`,
+            emoji: '💸',
+          });
+          return;
+        }
 
-      updateGameState({
-        gold: currentGold - decoration.price,
-        inventory: newInventory,
-        equippedDecoration: decoration.id,
-      });
+        const newInventory = [
+          ...currentInventory,
+          {
+            itemType: 'cosmetic' as const,
+            name: decoration.id,
+            rarity: decoration.rarity,
+            quantity: 1,
+          },
+        ];
 
-      setModalAlert({
-        title: '구매 & 장착 완료!',
-        message: `${decoration.emoji} ${decoration.name}을(를) 구매하고 프로필에 장착했습니다!`,
-        emoji: '✨',
-      });
+        updateGameState({
+          gold: currentGold - decoration.price,
+          inventory: newInventory,
+        });
+
+        setModalAlert({
+          title: '구매 완료!',
+          message: `${decoration.emoji} ${decoration.name}을(를) 인벤토리에 보관했습니다. 프로필에서 장착할 수 있습니다.`,
+          emoji: '✨',
+        });
+      } else {
+        setModalAlert({
+          title: '이미 보유 중',
+          message: '프로필 탭의 인벤토리에서 장착하거나 해제할 수 있습니다.',
+          emoji: '🎒',
+        });
+      }
     },
     [updateGameState]
   );
 
-  // 방지권 구매
+  const handleEquipCosmetic = useCallback(
+    (cosmeticName: string) => {
+      const currentSession = useSessionStore.getState().session;
+      if (!currentSession) return;
+
+      const currentPersonaData = currentSession.personaData;
+      const cosmetic = cosmeticName.startsWith('avatar_')
+        ? SPECIAL_AVATAR_ITEMS.find((item) => `avatar_${item.id}` === cosmeticName)
+        : PROFILE_DECORATIONS.find((item) => item.id === cosmeticName);
+      const border = getBorderByInventoryName(cosmeticName);
+
+      if (border) {
+        updateGameState({
+          equippedBorder: currentPersonaData.equippedBorder === border.id ? null : border.id,
+        });
+        return;
+      }
+
+      if (cosmetic && cosmeticName.startsWith('avatar_')) {
+        const avatarId = cosmeticName.replace('avatar_', '');
+        const isEquipped = currentPersonaData.specialAvatarId === avatarId;
+        updateGameState({
+          specialAvatarId: isEquipped ? null : avatarId,
+          avatarType: isEquipped ? 'emoji' : 'special_avatar',
+          avatarUrl: null,
+        });
+        return;
+      }
+
+      if (cosmetic) {
+        updateGameState({
+          equippedDecoration: currentPersonaData.equippedDecoration === cosmetic.id ? null : cosmetic.id,
+        });
+      }
+    },
+    [updateGameState]
+  );
+
+  const handleEquipTitle = useCallback(
+    (title: string) => {
+      const currentSession = useSessionStore.getState().session;
+      if (!currentSession) return;
+
+      const currentTitle = currentSession.personaData.equippedTitle;
+      updateGameState({ equippedTitle: currentTitle === title ? null : title });
+    },
+    [updateGameState]
+  );
+
+  // 🛡️ 방지권 구매
   const handleBuyProtectionTicket = useCallback(() => {
     const currentSession = useSessionStore.getState().session;
     if (!currentSession) return;
@@ -363,7 +568,7 @@ export const HomePage: React.FC = () => {
     });
   }, [updateGameState]);
 
-  // 🎲 퀘스트 리롤(리셋) 티켓 구매
+  // 🎲 퀘스트 리롤 티켓 구매
   const handleBuyRerollTicket = useCallback(() => {
     const currentSession = useSessionStore.getState().session;
     if (!currentSession) return;
@@ -415,13 +620,13 @@ export const HomePage: React.FC = () => {
 
     setModalAlert({
       title: '리롤 티켓 구매 완료!',
-      message: '퀘스트 탭에서 일일 퀘스트를 새로운 3개로 무작위 재구성할 수 있습니다.',
+      message: '최초 지정한 습관/요구사항을 기반으로 AI가 퀘스트 3개를 새로 제작해줍니다!',
       emoji: '🎲',
     });
   }, [updateGameState]);
 
-  // 🎲 퀘스트 리롤 티켓 사용
-  const handleUseRerollTicket = useCallback(() => {
+  // 🎲 퀘스트 리롤 티켓 사용 (요구사항 2: 최초 습관/요구사항/난이도 기반 AI 재제작)
+  const handleUseRerollTicket = useCallback(async () => {
     const currentSession = useSessionStore.getState().session;
     if (!currentSession) return;
 
@@ -439,41 +644,52 @@ export const HomePage: React.FC = () => {
       return;
     }
 
-    // 티켓 1개 차감
-    const newInventory = currentInventory.map((i) =>
-      i.itemType === 'reroll_ticket' ? { ...i, quantity: (i.quantity || 1) - 1 } : i
-    ).filter((i) => i.quantity > 0);
+    setLoading(true);
 
-    updateGameState({
-      inventory: newInventory,
-    });
+    try {
+      const userPrefs = currentPersonaData.userPreferences;
+      const personaName = currentPersonaData.persona?.name || '퀘스터';
+        const rerollDifficulty = (['easy', 'normal', 'hard'] as const)[Math.floor(Math.random() * 3)];
 
-    // 퀘스트 풀에서 무작위 3개 선별
-    const shuffled = [...ALL_QUEST_POOL].sort(() => 0.5 - Math.random());
-    const selectedQuests = shuffled.slice(0, 3).map((q, idx) => ({
-      ...q,
-      id: `reroll_${Date.now()}_${idx}`,
-      status: 'pending' as const,
-    }));
-
-    setQuests(selectedQuests as any);
-
-    setModalAlert({
-      title: '퀘스트 리롤 완료!',
-      message: '새로운 일일 퀘스트 3개가 지급되었습니다! 🎲',
-      emoji: '✨',
-    });
-  }, [setQuests, updateGameState]);
-
-  // 프로필 장식 장착/해제 핸들러
-  const handleEquipDecoration = useCallback(
-    (decorationId: string | null) => {
-      updateGameState({
-        equippedDecoration: decorationId,
+      const aiResponse = await aiApi.generateQuests({
+        personaName,
+        habits: userPrefs?.habits?.length ? userPrefs.habits : ['독서와 학습', '집중력과 생산성', '운동과 건강'],
+        note: userPrefs?.note || '리롤 티켓을 사용한 맞춤 퀘스트 재제작',
+          difficulty: rerollDifficulty,
       });
-    },
-    [updateGameState]
-  );
+
+      const newInventory = currentInventory
+        .map((i) => (i.itemType === 'reroll_ticket' ? { ...i, quantity: (i.quantity || 1) - 1 } : i))
+        .filter((i) => i.quantity > 0);
+
+      updateGameState({
+        inventory: newInventory,
+      });
+
+      if (aiResponse.success && aiResponse.data && aiResponse.data.length >= 3) {
+        setQuests(aiResponse.data);
+      } else {
+        const shuffled = [...ALL_QUEST_POOL].sort(() => 0.5 - Math.random());
+        const selectedQuests = shuffled.slice(0, 3).map((q, idx) => ({
+          ...q,
+          difficulty: rerollDifficulty,
+          id: `reroll_${Date.now()}_${idx}`,
+          status: 'pending' as const,
+        }));
+        setQuests(selectedQuests as any);
+      }
+
+      setModalAlert({
+        title: 'AI 퀘스트 재제작 완료!',
+        message: '처음 선택하신 요구사항을 바탕으로 AI가 새로운 퀘스트 3개를 맞춤 제작했습니다! 🎲',
+        emoji: '✨',
+      });
+    } catch (error) {
+      console.error('AI Reroll failed:', error);
+    } finally {
+      setLoading(false);
+    }
+  }, [setQuests, updateGameState]);
 
   // 로그아웃
   const handleLogout = useCallback(() => {
@@ -481,68 +697,49 @@ export const HomePage: React.FC = () => {
     navigate('/');
   }, [clearSession, navigate]);
 
-  // 계산된 값들
+  // 계산된 스탯 값들
   const currentLevel = personaData.level || 1;
   const currentExp = personaData.totalExp || 0;
   const expProgress = Math.min(100, Math.round(((currentExp % 500) / 500) * 100));
-  const equippedDecorationObj = PROFILE_DECORATIONS.find(
-    (d) => d.id === personaData.equippedDecoration
-  );
+  const totalAttendance = personaData.totalAttendanceDays || (personaData.streak?.currentStreak || 1);
+  const rankingPoints = personaData.seasonRankingPoints || 0;
 
-  // 🏆 실시간 점수 순 정렬된 페르소나 랭킹 목록
-  const rankedPersonas = PERSONAS.map((persona) => {
-    const isCurrent = personaData.persona?.id === persona.id;
-    const score = isCurrent
-      ? persona.baseScore + (personaData.seasonRankingPoints || 0)
-      : persona.baseScore;
-    const level = isCurrent ? currentLevel : persona.initialLevel;
-    return {
-      ...persona,
-      score,
-      level,
-      isCurrent,
-    };
-  }).sort((a, b) => b.score - a.score);
-
-  // 상단 스탯 배지 리스트
-  const headerStats = [
-    {
-      icon: '🔥',
-      label: '연속 출석',
-      value: `${personaData.streak?.currentStreak || 0}일`,
-      color: 'from-orange-500/20 via-amber-500/20 to-red-500/20 border-orange-400/40 text-orange-200',
-    },
-    {
-      icon: '💰',
-      label: '보유 골드',
-      value: `${personaData.gold || 0}`,
-      color: 'from-yellow-500/20 via-amber-500/20 to-yellow-600/20 border-yellow-400/40 text-yellow-200',
-    },
-    {
-      icon: '✨',
-      label: '퀘스트 완료',
-      value: `${personaData.stats?.totalQuestsCompleted || 0}개`,
-      color: 'from-purple-500/20 via-pink-500/20 to-indigo-500/20 border-purple-400/40 text-purple-200',
-    },
-  ];
+  // Header 상단 콤팩트 스탯 객체 (요구사항 5 완수)
+  const headerUserStats = {
+    level: currentLevel,
+    expProgress,
+    currentStreak: personaData.streak?.currentStreak || 0,
+    totalAttendanceDays: totalAttendance,
+    seasonRankingPoints: rankingPoints,
+    gold: personaData.gold || 0,
+  };
 
   return (
     <div className="min-h-screen h-screen overflow-y-auto bg-slate-950 text-white relative font-sans selection:bg-purple-500 selection:text-white">
-      {/* 🌟 고도화된 Glassmorphism 배경 그래디언트 오버레이 */}
+      {/* 🌟 그래디언트 오버레이 */}
       <div className="fixed inset-0 pointer-events-none overflow-hidden z-0">
         <div className="absolute -top-40 -left-40 w-96 h-96 bg-purple-600/30 rounded-full blur-3xl animate-pulse" />
         <div className="absolute top-1/3 -right-40 w-96 h-96 bg-pink-600/25 rounded-full blur-3xl animate-pulse delay-1000" />
-        <div className="absolute -bottom-40 left-1/3 w-96 h-96 bg-blue-600/25 rounded-full blur-3xl animate-pulse delay-700" />
       </div>
 
-      {/* 고정 헤더 */}
+      {/* 숨겨진 파일 임포트 레퍼런스 */}
+      <input
+        type="file"
+        ref={fileInputRef}
+        onChange={handleFileUpload}
+        accept="image/*"
+        className="hidden"
+      />
+
+      {/* 고정 헤더: 요구사항 5 (연속 출석, 총 출석, 포인트, 골드, 레벨, XP n% 맨 상단부 압축 명시) */}
       <Header
         title="HabitQuest"
         subtitle={`${personaData.persona?.name || '사용자'} 님의 모험`}
+        userStats={headerUserStats}
         trailing={
           <button
             onClick={handleLogout}
-            className="flex items-center gap-1.5 bg-gradient-to-r from-purple-500/30 to-pink-500/30 hover:from-purple-500/50 hover:to-pink-500/50 text-white text-xs font-semibold px-3 py-1.5 rounded-xl border border-purple-300/40 backdrop-blur-md shadow-md transition-all active:scale-95"
+            className="flex items-center gap-1 bg-purple-500/20 hover:bg-purple-500/40 text-purple-200 text-[11px] font-semibold px-2.5 py-1 rounded-xl border border-purple-400/30 backdrop-blur-md transition-all active:scale-95"
             title="페르소나 선택창으로 돌아가기"
           >
             <span>👤 선택창으로</span>
@@ -550,90 +747,33 @@ export const HomePage: React.FC = () => {
         }
       />
 
+      {/* 메인 콘텐츠 영역 (상단 거대 대시보드 카드 전면 삭제 완료) */}
       <main className="max-w-xl mx-auto px-4 pt-4 pb-36 relative z-10 space-y-4">
-        {/* 맨 위로 올린 최상단 종합 대시보드 (닉네임, 레벨, 경험치, 연속 출석, 보유 골드, 완료 횟수) */}
-        <div className="bg-gradient-to-r from-purple-900/50 via-indigo-900/40 to-slate-900/60 backdrop-blur-xl p-4 rounded-3xl border border-white/20 shadow-2xl space-y-3">
-          {/* 1. 닉네임, 레벨, 아바타, 경험치 */}
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-3">
-              <div className="relative">
-                <div className="w-12 h-12 rounded-2xl bg-gradient-to-tr from-purple-500 to-pink-500 flex items-center justify-center text-2xl shadow-lg border border-white/30">
-                  {AVATARS[personaData.avatarIndex || 0]}
-                </div>
-                {equippedDecorationObj && (
-                  <span className="absolute -top-2 -right-2 text-lg drop-shadow-md">
-                    {equippedDecorationObj.emoji}
-                  </span>
-                )}
-              </div>
-              <div>
-                <div className="flex items-center gap-2">
-                  <h3 className="font-extrabold text-lg text-white">
-                    {personaData.persona?.name}
-                  </h3>
-                  <span className="text-xs px-2.5 py-0.5 rounded-full bg-purple-500/40 border border-purple-300/50 text-purple-200 font-bold">
-                    Lv.{currentLevel}
-                  </span>
-                </div>
-                <p className="text-xs text-slate-300">
-                  {equippedDecorationObj?.name ? `${equippedDecorationObj.name} 퀘스터` : `레벨 ${currentLevel} 퀘스터`}
-                </p>
-              </div>
-            </div>
-            <div className="text-right">
-              <span className="text-xs text-purple-300 font-semibold">{expProgress}% EXP</span>
-              <p className="text-[10px] text-slate-400">({currentExp % 500} / 500)</p>
-            </div>
-          </div>
-
-          {/* 경험치 프로그레스 바 */}
-          <div className="w-full bg-slate-950/60 h-2.5 rounded-full overflow-hidden p-0.5 border border-white/10">
-            <div
-              className="bg-gradient-to-r from-purple-500 via-pink-500 to-blue-400 h-full rounded-full transition-all duration-500"
-              style={{ width: `${expProgress}%` }}
-            />
-          </div>
-
-          {/* 2. 연속 출석 일수, 보유 골드, 퀘스트 완료 횟수 (3열 배지) */}
-          <div className="grid grid-cols-3 gap-2 pt-1 border-t border-white/10">
-            {headerStats.map((stat, idx) => (
-              <div
-                key={idx}
-                className={`bg-gradient-to-br ${stat.color} backdrop-blur-md rounded-2xl p-2.5 text-center border shadow-md transition-all duration-300 hover:scale-105`}
-              >
-                <div className="text-xl mb-0.5">{stat.icon}</div>
-                <div className="text-[10px] text-slate-300 font-medium">{stat.label}</div>
-                <div className="text-base font-bold text-white mt-0.5">{stat.value}</div>
-              </div>
-            ))}
-          </div>
-        </div>
-
         {/* ================= 탭 1: 퀘스트 ================= */}
         {activeTab === 'quests' && (
           <div className="space-y-4">
             <div className="flex items-center justify-between px-1">
               <h2 className="text-lg font-bold bg-gradient-to-r from-purple-300 via-pink-300 to-blue-300 bg-clip-text text-transparent flex items-center gap-2">
-                <span>⚔️ 오늘의 퀘스트</span>
+                <span>⚔️ 오늘의 AI 맞춤 퀘스트</span>
                 <span className="text-xs px-2.5 py-0.5 rounded-full bg-purple-500/20 border border-purple-400/30 text-purple-200 font-normal">
                   {completedCount}/{quests.length} 완료
                 </span>
               </h2>
 
-              {/* 🎲 자그마한 퀘스트 리롤 버튼 */}
+              {/* 🎲 요구사항 2: AI 요구사항 기반 리롤 버튼 */}
               <button
                 onClick={handleUseRerollTicket}
                 className="flex items-center gap-1 text-[11px] px-2.5 py-1 rounded-xl bg-purple-600/30 hover:bg-purple-600/50 border border-purple-400/40 text-purple-200 font-medium transition-all shadow-md active:scale-95"
-                title="리롤 티켓 1개를 사용하여 퀘스트 무작위 재구성"
+                title="리롤 티켓 1개를 사용하여 최초 요구사항 기반 AI 퀘스트 재제작"
               >
-                <span>🎲 리롤 (보유: {(personaData.inventory || []).find((i) => i.itemType === 'reroll_ticket')?.quantity || 0}개)</span>
+                <span>🎲 AI 리롤 (보유: {(personaData.inventory || []).find((i) => i.itemType === 'reroll_ticket')?.quantity || 0}개)</span>
               </button>
             </div>
 
             {loading ? (
               <div className="text-center py-12 bg-white/5 backdrop-blur-md rounded-3xl border border-white/10">
                 <div className="inline-block animate-spin text-3xl mb-2">⏳</div>
-                <p className="text-sm text-slate-300">퀘스트를 로딩하는 중...</p>
+                <p className="text-sm text-slate-300">AI가 맞춤형 퀘스트를 창작하는 중...</p>
               </div>
             ) : pendingQuests.length > 0 ? (
               <div className="space-y-3">
@@ -651,7 +791,7 @@ export const HomePage: React.FC = () => {
                 <div className="text-5xl mb-3 animate-bounce">🎉</div>
                 <h3 className="text-lg font-bold text-white mb-1">모든 오늘의 퀘스트 완료!</h3>
                 <p className="text-xs text-slate-300">
-                  오늘의 습관을 완수했습니다! 내일 새로운 퀘스트가 찾아옵니다.
+                  오늘의 목표를 완수하셨습니다! 내일 새로운 AI 맞춤 퀘스트가 제공됩니다.
                 </p>
               </div>
             )}
@@ -675,13 +815,12 @@ export const HomePage: React.FC = () => {
             <h2 className="text-lg font-bold bg-gradient-to-r from-purple-300 via-pink-300 to-blue-300 bg-clip-text text-transparent px-1">
               📊 활동 통계
             </h2>
-            <div className="grid gap-4">
+            <div className="grid gap-3">
               {[
                 {
                   label: '월간 퀘스트 달성률',
                   value: `${personaData.stats?.monthlySuccessRate || 0}%`,
                   desc: '이번 달 목표 이행 비율',
-                  color: 'from-blue-600/30 to-cyan-600/20 border-blue-400/30',
                   gradient: 'from-blue-400 to-cyan-300',
                   progress: personaData.stats?.monthlySuccessRate || 0,
                 },
@@ -689,38 +828,25 @@ export const HomePage: React.FC = () => {
                   label: '최고 연속 달성 기록',
                   value: `${personaData.streak?.bestStreak || 0}일`,
                   desc: '연속 출석 최고 수치',
-                  color: 'from-red-600/30 to-pink-600/20 border-red-400/30',
                   gradient: 'from-red-400 to-pink-300',
                 },
                 {
                   label: '누적 완료 퀘스트 수',
                   value: `${personaData.stats?.totalQuestsCompleted || 0}개`,
-                  desc: '지금까지 달성한 총 습관 수',
-                  color: 'from-purple-600/30 to-indigo-600/20 border-purple-400/30',
+                  desc: '지금까지 완수한 습관 수',
                   gradient: 'from-purple-400 to-indigo-300',
                 },
               ].map((stat, idx) => (
-                <div
-                  key={idx}
-                  className={`bg-gradient-to-br ${stat.color} backdrop-blur-xl rounded-3xl p-5 border shadow-xl`}
-                >
-                  <div className="flex justify-between items-start mb-2">
+                <div key={idx} className="bg-white/5 backdrop-blur-xl rounded-2xl p-4 border border-white/10 shadow-xl">
+                  <div className="flex justify-between items-start mb-1">
                     <div>
-                      <span className="text-xs text-slate-300 font-medium">{stat.label}</span>
-                      <div className={`text-3xl font-extrabold bg-gradient-to-r ${stat.gradient} bg-clip-text text-transparent mt-1`}>
+                      <span className="text-xs text-slate-400 font-medium">{stat.label}</span>
+                      <div className={`text-2xl font-black bg-gradient-to-r ${stat.gradient} bg-clip-text text-transparent mt-1`}>
                         {stat.value}
                       </div>
                     </div>
                   </div>
                   <p className="text-[11px] text-slate-400">{stat.desc}</p>
-                  {stat.progress !== undefined && (
-                    <div className="mt-3 w-full bg-slate-950/60 rounded-full h-2 overflow-hidden border border-white/10">
-                      <div
-                        className={`bg-gradient-to-r ${stat.gradient} h-full rounded-full transition-all duration-500`}
-                        style={{ width: `${stat.progress}%` }}
-                      />
-                    </div>
-                  )}
                 </div>
               ))}
             </div>
@@ -731,105 +857,109 @@ export const HomePage: React.FC = () => {
         {activeTab === 'shop' && (
           <div className="space-y-5">
             <h2 className="text-lg font-bold bg-gradient-to-r from-purple-300 via-pink-300 to-blue-300 bg-clip-text text-transparent px-1">
-              🛒 아이템 상점
+              🛒 아이템 & 코스메틱 상점
             </h2>
 
-            {/* 기능성 티켓 섹션 (방지권 & 리롤 티켓) */}
+            {/* 티켓 상점 */}
             <div className="grid gap-3">
-              {/* 🛡️ 스트릭 방지권 */}
-              <div className="bg-gradient-to-br from-blue-900/40 via-indigo-900/30 to-slate-900/50 backdrop-blur-xl rounded-3xl p-4 border border-blue-400/30 shadow-2xl">
-                <div className="flex items-center justify-between mb-2">
-                  <div className="flex items-center gap-3">
-                    <div className="w-10 h-12 rounded-2xl bg-blue-500/20 border border-blue-400/40 flex items-center justify-center text-2xl shadow-lg">
-                      🛡️
-                    </div>
-                    <div>
-                      <h3 className="font-bold text-sm text-white">스트릭 방지권</h3>
-                      <p className="text-[11px] text-slate-300">퀘스트 미달성 시 연속 수치를 1회 보호</p>
-                    </div>
+              <div className="bg-white/5 backdrop-blur-xl rounded-2xl p-4 border border-white/10 flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                  <div className="text-3xl">🛡️</div>
+                  <div>
+                    <h3 className="font-bold text-sm text-white">스트릭 방지권</h3>
+                    <p className="text-[11px] text-slate-400">퀘스트 미달성 시 연속 수치 1회 보호</p>
                   </div>
                 </div>
-                <div className="flex items-center justify-between pt-2 border-t border-white/10">
-                  <div className="text-xs text-slate-300">
-                    보유: <span className="text-blue-300 font-bold">
-                      {(personaData.inventory || []).find((i) => i.itemType === 'protection_ticket')?.quantity || 0}개
-                    </span> / 3개
-                  </div>
-                  <Button
-                    label="구매 (500 💰)"
-                    variant="primary"
-                    onClick={handleBuyProtectionTicket}
-                  />
-                </div>
+                <Button label="구매 (500 💰)" variant="primary" onClick={handleBuyProtectionTicket} />
               </div>
 
-              {/* 🎲 퀘스트 리롤 티켓 */}
-              <div className="bg-gradient-to-br from-purple-900/40 via-pink-900/30 to-slate-900/50 backdrop-blur-xl rounded-3xl p-4 border border-purple-400/30 shadow-2xl">
-                <div className="flex items-center justify-between mb-2">
-                  <div className="flex items-center gap-3">
-                    <div className="w-10 h-12 rounded-2xl bg-purple-500/20 border border-purple-400/40 flex items-center justify-center text-2xl shadow-lg">
-                      🎲
-                    </div>
-                    <div>
-                      <h3 className="font-bold text-sm text-white">퀘스트 리롤 티켓</h3>
-                      <p className="text-[11px] text-slate-300">어려운 퀘스트를 새로운 3개로 무작위 변경</p>
-                    </div>
+              <div className="bg-white/5 backdrop-blur-xl rounded-2xl p-4 border border-white/10 flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                  <div className="text-3xl">🎲</div>
+                  <div>
+                    <h3 className="font-bold text-sm text-white">AI 퀘스트 리롤 티켓</h3>
+                    <p className="text-[11px] text-slate-400">AI가 최초 요구사항 기반으로 3개 새로 생성</p>
                   </div>
                 </div>
-                <div className="flex items-center justify-between pt-2 border-t border-white/10">
-                  <div className="text-xs text-slate-300">
-                    보유: <span className="text-purple-300 font-bold">
-                      {(personaData.inventory || []).find((i) => i.itemType === 'reroll_ticket')?.quantity || 0}개
-                    </span> / 3개
-                  </div>
-                  <Button
-                    label="구매 (300 💰)"
-                    variant="primary"
-                    onClick={handleBuyRerollTicket}
-                  />
-                </div>
+                <Button label="구매 (300 💰)" variant="primary" onClick={handleBuyRerollTicket} />
               </div>
             </div>
 
-            {/* 프로필 장식 아이템 섹션 */}
-            <div className="space-y-3">
-              <h3 className="text-sm font-semibold text-slate-300 px-1">✨ 프로필 코스메틱 장식</h3>
+            {/* 🌟 요구사항 1: 특별 프로필 아바타 상점 */}
+            <div className="space-y-2">
+              <h3 className="text-sm font-bold text-slate-300 px-1">🌟 특별 프로필 아바타</h3>
+              <div className="grid grid-cols-2 gap-3">
+                {SPECIAL_AVATAR_ITEMS.map((item) => {
+                  const hasItem = (personaData.inventory || []).some(
+                    (i) => i.itemType === 'cosmetic' && i.name === `avatar_${item.id}`
+                  );
+
+                  return (
+                    <div key={item.id} className="bg-white/5 backdrop-blur-xl rounded-2xl p-3 border border-white/10 flex flex-col justify-between items-center text-center">
+                      <AvatarFrame specialAvatarId={item.id} size="lg" className="mb-2" />
+                      <h4 className="font-bold text-xs text-white mb-1">{item.name}</h4>
+                      <p className="text-[11px] text-yellow-300 font-bold mb-2">{item.price} 💰</p>
+                      {hasItem ? (
+                        <span className="w-full py-1.5 rounded-xl text-xs font-bold border border-emerald-400/30 bg-emerald-500/10 text-emerald-200">
+                          인벤토리 보관됨
+                        </span>
+                      ) : (
+                        <Button label="구매하기" variant="primary" onClick={() => handleBuySpecialAvatar(item.id)} />
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+
+            {/* 🎨 요구사항 2: 프로필 테두리 상점 */}
+            <div className="space-y-2">
+              <h3 className="text-sm font-bold text-slate-300 px-1">🎨 프로필 테두리 (Border)</h3>
+              <div className="grid grid-cols-2 gap-3">
+                {BORDER_ITEMS.map((item) => {
+                  const hasItem = (personaData.inventory || []).some(
+                    (i) => i.itemType === 'cosmetic' && i.name === `border_${item.id}`
+                  );
+
+                  return (
+                    <div key={item.id} className="bg-white/5 backdrop-blur-xl rounded-2xl p-3 border border-white/10 flex flex-col justify-between items-center text-center">
+                      <AvatarFrame equippedBorder={item.id} avatarIndex={personaData.avatarIndex || 0} size="lg" className="mb-2" />
+                      <h4 className="font-bold text-xs text-white mb-0.5">{item.name}</h4>
+                      <p className="text-[10px] text-slate-400 mb-1">{item.desc}</p>
+                      <p className="text-[11px] text-yellow-300 font-bold mb-2">{item.price} 💰</p>
+                      {hasItem ? (
+                        <span className="w-full py-1.5 rounded-xl text-xs font-bold border border-emerald-400/30 bg-emerald-500/10 text-emerald-200">
+                          인벤토리 보관됨
+                        </span>
+                      ) : (
+                        <Button label="구매하기" variant="primary" onClick={() => handleBuyBorder(item.id)} />
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+
+            {/* 👑 요구사항 2: 프로필 장식 아이템 */}
+            <div className="space-y-2">
+              <h3 className="text-sm font-bold text-slate-300 px-1">✨ 프로필 코스메틱 장식</h3>
               <div className="grid grid-cols-2 gap-3">
                 {PROFILE_DECORATIONS.map((decoration) => {
                   const hasItem = (personaData.inventory || []).some(
                     (i) => i.itemType === 'cosmetic' && i.name === decoration.id
                   );
-                  const isEquipped = personaData.equippedDecoration === decoration.id;
 
                   return (
-                    <div
-                      key={decoration.id}
-                      className="bg-gradient-to-br from-white/10 to-white/5 backdrop-blur-xl rounded-2xl p-4 border border-white/20 shadow-xl flex flex-col justify-between"
-                    >
-                      <div>
-                        <div className="text-3xl mb-2">{decoration.emoji}</div>
-                        <h4 className="font-bold text-sm text-white">{decoration.name}</h4>
-                        <p className="text-xs text-yellow-300 font-semibold mb-3">
-                          {decoration.price} 💰
-                        </p>
-                      </div>
+                    <div key={decoration.id} className="bg-white/5 backdrop-blur-xl rounded-2xl p-3 border border-white/10 flex flex-col justify-between items-center text-center">
+                      <AvatarFrame equippedDecoration={decoration.id} avatarIndex={personaData.avatarIndex || 0} size="lg" className="mb-2" />
+                      <h4 className="font-bold text-xs text-white mb-0.5">{decoration.name}</h4>
+                      <p className="text-[11px] text-yellow-300 font-bold mb-2">{decoration.price} 💰</p>
                       {hasItem ? (
-                        <button
-                          onClick={() => handleEquipDecoration(isEquipped ? null : decoration.id)}
-                          className={`w-full py-2 rounded-xl text-xs font-semibold transition-all border ${
-                            isEquipped
-                              ? 'bg-purple-500/40 border-purple-400 text-white'
-                              : 'bg-white/10 hover:bg-white/20 border-white/20 text-slate-200'
-                          }`}
-                        >
-                          {isEquipped ? '착용 중 ✓' : '장착하기'}
-                        </button>
+                        <span className="w-full py-1.5 rounded-xl text-xs font-bold border border-emerald-400/30 bg-emerald-500/10 text-emerald-200">
+                          인벤토리 보관됨
+                        </span>
                       ) : (
-                        <Button
-                          label="구매하기"
-                          variant="primary"
-                          onClick={() => handleBuyDecoration(decoration.id)}
-                        />
+                        <Button label="구매하기" variant="primary" onClick={() => handleBuyDecoration(decoration.id)} />
                       )}
                     </div>
                   );
@@ -847,36 +977,135 @@ export const HomePage: React.FC = () => {
             </h2>
 
             <div className="bg-gradient-to-br from-purple-900/30 via-slate-900/50 to-slate-950/80 backdrop-blur-xl rounded-3xl p-6 border border-white/20 shadow-2xl text-center space-y-4">
+              {/* 요구사항 2: 시각적 AvatarFrame 렌더링 */}
               <div className="relative inline-block mx-auto">
-                <div className="w-24 h-24 rounded-3xl bg-gradient-to-tr from-purple-500 via-pink-500 to-blue-500 flex items-center justify-center text-5xl shadow-2xl border-2 border-white/40">
-                  {AVATARS[personaData.avatarIndex || 0]}
-                </div>
-                {equippedDecorationObj && (
-                  <span className="absolute -top-3 -right-3 text-3xl drop-shadow-lg">
-                    {equippedDecorationObj.emoji}
-                  </span>
-                )}
+                <AvatarFrame
+                  avatarIndex={personaData.avatarIndex}
+                  avatarUrl={personaData.avatarUrl}
+                  specialAvatarId={personaData.specialAvatarId}
+                  equippedBorder={personaData.equippedBorder}
+                  equippedDecoration={personaData.equippedDecoration}
+                  size="xl"
+                />
               </div>
 
               <div>
-                <h3 className="text-xl font-extrabold text-white">
-                  {personaData.persona?.name}
-                </h3>
-                <p className="text-xs text-purple-300 font-medium">
-                  Lv.{currentLevel} • {equippedDecorationObj?.name || '기본 칭호'}
+                <h3 className="text-xl font-extrabold text-white">{personaData.persona?.name}</h3>
+                <p className="text-xs text-purple-300 font-medium mt-1">
+                  Lv.{currentLevel} • {personaData.equippedTitle || '기본 칭호'}
                 </p>
               </div>
 
-              {/* 내 인벤토리 티켓 및 장식 관리 */}
+              {/* 📷 요구사항 1: 아바타 사진 첨부 버튼 */}
+              <div className="pt-2 flex justify-center gap-2">
+                <button
+                  onClick={() => fileInputRef.current?.click()}
+                  className="flex items-center gap-1.5 px-4 py-2 rounded-xl bg-purple-600/40 hover:bg-purple-600/60 border border-purple-400/40 text-white text-xs font-bold transition-all shadow-md active:scale-95"
+                >
+                  <span>📷 내 컴퓨터 사진 첨부하기</span>
+                </button>
+              </div>
+
+              {/* 내 인벤토리 품목 */}
               <div className="pt-4 border-t border-white/10 text-left space-y-3">
-                <h4 className="text-xs font-semibold text-slate-300">
-                  보유 기능성 티켓
-                </h4>
+                <div className="flex items-center justify-between">
+                  <h4 className="text-xs font-semibold text-slate-300">코스메틱 인벤토리</h4>
+                  <span className="text-[10px] text-slate-500">프로필 꾸미기</span>
+                </div>
+                {[
+                  {
+                    label: '칭호',
+                    items: (personaData.inventory || []).filter(
+                      (item) =>
+                        item.itemType === 'cosmetic' &&
+                        item.name !== '없음' &&
+                        isTitleInventoryName(item.name)
+                    ),
+                  },
+                  {
+                    label: '테두리',
+                    items: (personaData.inventory || []).filter(
+                      (item) =>
+                        item.itemType === 'cosmetic' &&
+                        isBorderInventoryName(item.name)
+                    ),
+                  },
+                  {
+                    label: '장식',
+                    items: (personaData.inventory || []).filter(
+                      (item) =>
+                        item.itemType === 'cosmetic' &&
+                        (item.name.startsWith('avatar_') ||
+                          PROFILE_DECORATIONS.some((decoration) => decoration.id === item.name))
+                    ),
+                  },
+                ].map((category) => (
+                  <div key={category.label} className="space-y-2">
+                    <h5 className="text-[11px] font-bold text-purple-200">{category.label}</h5>
+                    {category.items.length > 0 ? (
+                      category.items.map((item) => {
+                        const avatar = item.name.startsWith('avatar_')
+                          ? SPECIAL_AVATAR_ITEMS.find((entry) => `avatar_${entry.id}` === item.name)
+                          : null;
+                        const border = getBorderByInventoryName(item.name);
+
+                        const decoration = !avatar && !border
+                          ? PROFILE_DECORATIONS.find((entry) => entry.id === item.name)
+                          : null;
+                        const isTitle = category.label === '칭호';
+                        const label = avatar?.name || border?.name || decoration?.name || item.name;
+                        const preview = isTitle ? (
+                          <div className="w-10 h-10 rounded-xl bg-amber-500/15 border border-amber-300/30 flex items-center justify-center text-lg">🏅</div>
+                        ) : avatar ? (
+                          <AvatarFrame specialAvatarId={avatar.id} size="sm" />
+                        ) : border ? (
+                          <AvatarFrame equippedBorder={border.id} avatarIndex={personaData.avatarIndex || 0} size="sm" />
+                        ) : (
+                          <AvatarFrame equippedDecoration={decoration?.id} avatarIndex={personaData.avatarIndex || 0} size="sm" />
+                        );
+                        const equipped = isTitle
+                          ? personaData.equippedTitle === item.name
+                          : avatar
+                          ? personaData.specialAvatarId === avatar.id
+                          : border
+                          ? personaData.equippedBorder === border.id
+                          : personaData.equippedDecoration === decoration?.id;
+
+                        return (
+                          <div key={item.name} className="flex items-center gap-3 bg-white/5 border border-white/10 rounded-xl p-2.5">
+                            {preview}
+                            <div className="min-w-0 flex-1">
+                              <p className="text-xs font-bold text-white truncate">{label}</p>
+                              <p className="text-[10px] text-slate-400">{item.quantity}개 보유</p>
+                            </div>
+                            <button
+                              type="button"
+                              onClick={() => isTitle ? handleEquipTitle(item.name) : handleEquipCosmetic(item.name)}
+                              className={`shrink-0 px-2.5 py-1.5 rounded-lg border text-[11px] font-bold transition-colors ${
+                                equipped
+                                  ? 'border-purple-300 bg-purple-500/30 text-purple-100'
+                                  : 'border-white/20 bg-white/10 text-slate-200 hover:bg-white/20'
+                              }`}
+                            >
+                              {equipped ? '장착 해제' : '장착'}
+                            </button>
+                          </div>
+                        );
+                      })
+                    ) : (
+                      <p className="rounded-xl border border-dashed border-white/15 px-3 py-2.5 text-[10px] text-slate-500">
+                        보유한 {category.label}이 없습니다.
+                      </p>
+                    )}
+                  </div>
+                ))}
+
+                <h4 className="text-xs font-semibold text-slate-300">보유 기능성 티켓</h4>
                 <div className="grid grid-cols-2 gap-2 text-xs">
                   <div className="bg-white/5 border border-white/10 rounded-xl p-2.5 flex items-center justify-between">
                     <span className="flex items-center gap-1.5">
                       <span>🛡️</span>
-                      <span>스트릭 방지권</span>
+                      <span>방지권</span>
                     </span>
                     <span className="text-blue-300 font-bold">
                       {(personaData.inventory || []).find((i) => i.itemType === 'protection_ticket')?.quantity || 0}개
@@ -892,127 +1121,40 @@ export const HomePage: React.FC = () => {
                     </span>
                   </div>
                 </div>
-
-                <h4 className="text-xs font-semibold text-slate-300 pt-2">
-                  보유 프로필 장식
-                </h4>
-                <div className="space-y-2">
-                  <button
-                    onClick={() => handleEquipDecoration(null)}
-                    className={`w-full py-2.5 px-3 rounded-xl text-xs font-medium transition-all border flex items-center justify-between ${
-                      !personaData.equippedDecoration
-                        ? 'bg-purple-500/30 border-purple-400 text-white'
-                        : 'bg-white/5 border-white/10 text-slate-400 hover:bg-white/10'
-                    }`}
-                  >
-                    <span>장식 없음</span>
-                    {!personaData.equippedDecoration && <span>✓</span>}
-                  </button>
-
-                  {PROFILE_DECORATIONS.map((decoration) => {
-                    const hasItem = (personaData.inventory || []).some(
-                      (i) => i.itemType === 'cosmetic' && i.name === decoration.id
-                    );
-                    if (!hasItem) return null;
-
-                    const isEquipped = personaData.equippedDecoration === decoration.id;
-
-                    return (
-                      <button
-                        key={decoration.id}
-                        onClick={() => handleEquipDecoration(isEquipped ? null : decoration.id)}
-                        className={`w-full py-2.5 px-3 rounded-xl text-xs font-medium transition-all border flex items-center justify-between ${
-                          isEquipped
-                            ? 'bg-purple-500/30 border-purple-400 text-white'
-                            : 'bg-white/5 border-white/10 text-slate-300 hover:bg-white/10'
-                        }`}
-                      >
-                        <span className="flex items-center gap-2">
-                          <span>{decoration.emoji}</span>
-                          <span>{decoration.name}</span>
-                        </span>
-                        {isEquipped && <span className="text-purple-300 font-bold">착용 중 ✓</span>}
-                      </button>
-                    );
-                  })}
-                </div>
               </div>
-
-              <div className="pt-2">
-                <Button label="로그아웃" variant="secondary" onClick={handleLogout} />
-              </div>
-            </div>
-          </div>
-        )}
-
-        {/* ================= 탭 5: 랭킹 ================= */}
-        {activeTab === 'ranking' && (
-          <div className="space-y-4">
-            <h2 className="text-lg font-bold bg-gradient-to-r from-purple-300 via-pink-300 to-blue-300 bg-clip-text text-transparent px-1 flex items-center justify-between">
-              <span>🏆 실시간 시즌 랭킹</span>
-              <span className="text-xs font-normal text-slate-400">실시간 순위 반영 중 ⚡</span>
-            </h2>
-
-            <div className="space-y-3">
-              {rankedPersonas.map((persona, idx) => {
-                const medal = ['🥇 1위', '🥈 2위', '🥉 3위'][idx] || `🏅 ${idx + 1}위`;
-                const isCurrentPersona = persona.isCurrent;
-
-                return (
-                  <div
-                    key={persona.id}
-                    className={`bg-gradient-to-br ${
-                      isCurrentPersona
-                        ? 'from-purple-900/60 via-indigo-900/50 to-slate-900/70 border-purple-400/80 ring-2 ring-purple-400/50 shadow-purple-500/20'
-                        : 'from-white/10 to-white/5 border-white/20'
-                    } backdrop-blur-xl rounded-2xl p-4 border shadow-xl flex items-center justify-between transition-all`}
-                  >
-                    <div className="flex items-center gap-3">
-                      <div className="text-sm font-black px-2.5 py-1 rounded-xl bg-white/10 border border-white/20 text-yellow-300">
-                        {medal}
-                      </div>
-                      <div>
-                        <div className="flex items-center gap-2">
-                          <span className="font-bold text-sm text-white">{persona.name}</span>
-                          {isCurrentPersona && (
-                            <span className="text-[10px] px-2 py-0.5 rounded-full bg-purple-500/50 border border-purple-300/60 text-purple-200 font-bold">
-                              나 (PLAYING)
-                            </span>
-                          )}
-                        </div>
-                        <span className="text-xs text-slate-300">
-                          Lv.{persona.level} 퀘스터
-                        </span>
-                      </div>
-                    </div>
-                    <div className="text-right">
-                      <div className="text-base font-extrabold text-yellow-300">{persona.score} pt</div>
-                      <div className="text-[10px] text-slate-400">시즌 포인트</div>
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-          </div>
-        )}
-
-        {/* 팝업 모달 */}
-        {modalAlert && (
-          <div className="fixed inset-0 bg-black/60 backdrop-blur-md flex items-center justify-center z-50 p-4">
-            <div className="bg-gradient-to-br from-slate-900 via-purple-950 to-slate-900 backdrop-blur-2xl rounded-3xl p-6 border border-white/20 max-w-xs w-full text-center shadow-2xl space-y-4">
-              <div className="text-5xl animate-bounce">{modalAlert.emoji || '🔔'}</div>
-              <div>
-                <h3 className="text-lg font-bold text-white mb-1">{modalAlert.title}</h3>
-                <p className="text-xs text-slate-300 leading-relaxed">{modalAlert.message}</p>
-              </div>
-              <Button label="확인" variant="primary" onClick={() => setModalAlert(null)} />
             </div>
           </div>
         )}
       </main>
 
-      {/* 탭바 */}
-      <TabBar activeTab={activeTab} onTabChange={(tabId) => setActiveTab(tabId as TabId)} />
+      {/* 모달 알림 */}
+      {modalAlert && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-fadeIn">
+          <div className="bg-slate-900 border border-purple-400/40 rounded-3xl p-6 max-w-xs w-full text-center shadow-2xl space-y-3">
+            <div className="text-4xl">{modalAlert.emoji || '✨'}</div>
+            <h3 className="text-lg font-bold text-white">{modalAlert.title}</h3>
+            <p className="text-xs text-slate-300">{modalAlert.message}</p>
+            <button
+              onClick={() => setModalAlert(null)}
+              className="w-full py-2.5 rounded-xl bg-gradient-to-r from-purple-500 to-pink-500 text-white font-bold text-xs shadow-lg transition-all active:scale-95"
+            >
+              확인
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* 하단 고정 탭바 */}
+      <TabBar
+        activeTab={activeTab}
+        onTabChange={(tab) => {
+          if (tab === 'ranking') {
+            navigate('/ranking');
+          } else {
+            setActiveTab(tab as TabId);
+          }
+        }}
+      />
     </div>
   );
 };

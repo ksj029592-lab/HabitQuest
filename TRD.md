@@ -3,10 +3,10 @@
 ## 1. 문서 정보
 - 문서명: TRD (Technical Requirements Document)
 - 제품명: HabitQuest
-- 버전: v0.1
-- 작성일: 2026-08-01
-- 기준 문서: IDEA.txt, PRD.md
-- 대상 릴리스: Phase 1 (MVP 웹)
+- 버전: v0.2
+- 작성일: 2026-08-30
+- 기준 문서: IDEA.txt, PRD.md, AI-IDEA1.md
+- 대상 릴리스: Phase 1 (MVP 웹 + AI 확장)
 
 ## 2. 기술 목표
 - PRD의 MVP 기능을 안정적으로 구현 가능한 기술 구조를 정의한다.
@@ -64,7 +64,7 @@ flowchart LR
 - UserSession
   - personaId, sessionId, startedAt, lastActivityAt
 - User
-  - id, personaId, level, totalExp, gold, createdAt
+  - id, personaId, level, totalExp, gold, avatarUrl, avatarType, equippedBorder, equippedDecoration, createdAt
 - HabitCategory
   - id, name
 - DailyQuest
@@ -85,6 +85,12 @@ flowchart LR
   - id, userId, seasonId, dailyQuestId, basePoint, multiplier, penaltyRate, finalPoint, createdAt
 - SeasonRewardLog
   - id, userId, seasonId, percentileBand, rewardType, rewardValue, grantedAt
+
+### 6.2 UI & Graphics 및 AI 확장 사양
+- Avatar System: 기본 아바타 이모지/일러스트 외에 커스텀 사진 업로드(DataURL/Image Blob) 및 상점 특수 프로필 이미지 지원
+- Border & Decoration Overlay: 텍스트 표기 대신 CSS/SVG layer 오버레이로 프로필 아바타 주변에 테두리(Border ring) 및 장식(Flame, Crown, Aura 등) 시각화
+- Compact Header Status Bar: 메인 화면의 메인 정보 카드를 제거하고 Header 탑바 영역에 연속 출석, 총 출석, 포인트, 골드, 레벨, EXP %를 콤팩트한 칩/배지로 통합
+- AI Quest & Reroll: 사용자의 습관/노트/난이도를 세션 스토어에 보존하고, 리롤 티켓 사용 시 최초 요구사항을 전달하여 AI가 신규 3개 퀘스트를 동적 재창작
 
 ### 6.2 인덱스/제약
 - DailyQuest: unique(userId, questDateKst, slotNo) 또는 생성 시 정확히 3개 보장

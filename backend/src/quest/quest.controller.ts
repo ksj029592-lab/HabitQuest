@@ -22,14 +22,9 @@ export class QuestController {
   })
   @ApiResponse({ status: 200, type: DailyQuestListResponseDto })
   async getDailyQuests() {
-    // 실제로는 세션의 userId를 사용하지만, MVP에서는 테스트용으로 일반화
     return {
       success: true,
-      data: {
-        quests: [],
-        totalPending: 0,
-        totalCompleted: 0,
-      },
+      data: [],
     };
   }
 

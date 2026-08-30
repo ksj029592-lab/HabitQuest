@@ -44,9 +44,18 @@ export interface PersonaGameState {
   stats: UserStats;
   seasonRankingPoints?: number;
   avatarIndex?: number;
+  avatarUrl?: string | null;
+  avatarType?: 'emoji' | 'custom_image' | 'special_avatar';
+  specialAvatarId?: string | null;
   equippedTitle?: string | null;
   equippedBorder?: string | null;
   equippedDecoration?: string | null;
+  userPreferences?: {
+    habits: string[];
+    note?: string;
+    difficulty?: 'easy' | 'normal' | 'hard';
+  };
+  totalAttendanceDays?: number;
 }
 
 /** 연속 달성 데이터 */

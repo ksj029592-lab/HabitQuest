@@ -5,3 +5,4 @@ export { Header } from './Header';
 export { TabBar } from './TabBar';
 export { PersonaSelector } from './PersonaSelector';
 export { QuestCard } from './QuestCard';
+export { AvatarFrame } from './AvatarFrame';
