@@ -5,7 +5,7 @@
     "_generator": {
       "name": "bicep",
       "version": "0.43.8.12551",
-      "templateHash": "10154671068501946889"
+      "templateHash": "11399418135266415901"
     }
   },
   "parameters": {
@@ -36,10 +36,10 @@
       }
     },
     "databaseUrl": {
-      "type": "string",
+      "type": "securestring",
       "defaultValue": "",
       "metadata": {
-        "description": "Backend runtime application settings"
+        "description": "Backend runtime database connection string"
       }
     }
   },

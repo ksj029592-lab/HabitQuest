@@ -17,3 +17,10 @@ yarn-error.log*
 .coverage/
 .nyc_output/
 coverage/
+
+# Local deployment artifacts and exported service logs
+*.zip
+*.tar.gz
+backend/.deploy/
+*-azure-logs._unzipped/
+frontend/src/**/*.js

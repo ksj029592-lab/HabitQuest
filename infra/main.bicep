@@ -12,7 +12,8 @@ param staticWebAppName string
 @description('Globally unique backend Web App name')
 param backendWebAppName string
 
-@description('Backend runtime application settings')
+@description('Backend runtime database connection string')
+@secure()
 param databaseUrl string = ''
 
 resource resourceGroup 'Microsoft.Resources/resourceGroups@2024-03-01' = {
