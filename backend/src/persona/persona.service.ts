@@ -3,12 +3,17 @@
  */
 import { Injectable } from '@nestjs/common';
 import { PrismaService } from '@/prisma/prisma.service';
-import { SessionResponseDto } from './persona.dto';
+import { AiService } from '@/ai/ai.service';
+import { CreateSessionDto, SessionResponseDto } from './persona.dto';
 import { v4 as uuidv4 } from 'uuid';
+import { COSMETICS } from '@/common/game-catalog';
 
 @Injectable()
 export class PersonaService {
-  constructor(private prisma: PrismaService) {}
+  constructor(
+    private prisma: PrismaService,
+    private aiService: AiService,
+  ) {}
 
   /**
    * 모든 테스트 페르소나 조회
@@ -24,25 +29,38 @@ export class PersonaService {
   /**
    * 페르소나별 세션 생성
    */
-  async createSession(personaId: string): Promise<SessionResponseDto> {
+  async createSession(input: CreateSessionDto): Promise<SessionResponseDto> {
     // 페르소나 조회
-    const persona = await this.prisma.testPersona.findUnique({
-      where: { id: personaId },
+    const persona = await this.prisma.testPersona.findFirst({
+      where: {
+        OR: [{ id: input.personaId }, { role: input.personaId }],
+      },
     });
 
     if (!persona) {
       throw new Error('페르소나를 찾을 수 없습니다');
     }
 
+    const generatedQuests = await this.aiService.generateQuests({
+      personaName: persona.name,
+      habits: input.habits ?? [],
+      note: input.note ?? '',
+      difficulty: input.difficulty ?? 'normal',
+    });
+
     // 새 사용자 생성 (각 세션마다)
     const userId = uuidv4();
     const user = await this.prisma.user.create({
       data: {
         id: userId,
-        personaId,
+        personaId: persona.id,
         level: persona.initialLevel,
-        totalExp: 0,
+        totalExp: (persona.initialLevel - 1) * 300,
         gold: persona.initialGold,
+        habits: input.habits ?? [],
+        note: input.note ?? '',
+        preferredDifficulty: input.difficulty ?? 'normal',
+        avatarIndex: persona.role === 'advanced' ? 4 : persona.role === 'active' ? 2 : 0,
       },
     });
 
@@ -60,38 +78,39 @@ export class PersonaService {
       data: {
         userId,
         itemType: 'protection_ticket',
-        quantity: 0,
+        itemId: 'default',
+        rarity: 'common',
+        quantity: persona.role === 'advanced' ? 3 : persona.role === 'active' ? 2 : 0,
       },
     });
 
+    const initialItems = persona.role === 'advanced' ? ['border_rainbow_ring', '전설의'] : persona.role === 'active' ? ['border_gold_frame', '부지런한'] : [];
+    for (const itemId of initialItems) {
+      await this.prisma.inventory.create({ data: { userId, itemId, itemType: 'cosmetic', rarity: COSMETICS[itemId].rarity, quantity: 1 } });
+    }
+
     // 오늘 퀘스트 생성
-    const today = this.getKstDateString();
-    const quests = [];
-    const categories = await this.getOrCreateCategories();
+    const categories = await this.getOrCreateCategories(input.habits ?? []);
 
-    for (let i = 0; i < 3; i++) {
-      const difficulty = this.getRandomDifficulty();
-      const rewards = this.getQuestRewards(difficulty);
-
-      quests.push(
-        await this.prisma.dailyQuest.create({
-          data: {
-            userId,
-            categoryId: categories[i % categories.length].id,
-            questDateKst: today,
-            difficulty,
-            title: `[${difficulty === 'easy' ? '쉬움' : difficulty === 'normal' ? '보통' : '어려움'}] 퀘스트 ${i + 1}`,
-            description: `이 ${difficulty === 'easy' ? '쉬운' : difficulty === 'normal' ? '보통' : '어려운'} 퀘스트를 완료하세요`,
-            status: 'pending',
-            expReward: rewards.exp,
-            goldReward: rewards.gold,
-            slotNo: i as 0 | 1 | 2,
-          },
-        })
-      );
+    for (const [index, quest] of generatedQuests.entries()) {
+      await this.prisma.dailyQuest.create({
+        data: {
+          userId,
+          categoryId: categories[index % categories.length].id,
+          questDateKst: quest.questDateKst,
+          difficulty: quest.difficulty,
+          title: quest.title,
+          description: quest.description,
+          status: 'pending',
+          expReward: quest.expReward,
+          goldReward: quest.goldReward,
+          slotNo: index,
+        },
+      });
     }
 
     // 출석 기록
+    const today = this.getKstDateString();
     await this.prisma.attendance.upsert({
       where: { userId_dateKst: { userId, dateKst: today } },
       update: { checked: false },
@@ -102,14 +121,15 @@ export class PersonaService {
     const sessionId = uuidv4();
     await this.prisma.userSession.create({
       data: {
-        personaId,
+        personaId: input.personaId,
         sessionId,
+        userId,
       },
     });
 
     return {
       sessionId,
-      personaId,
+      personaId: input.personaId,
       startedAt: new Date().toISOString(),
       personaData: {
         userId,
@@ -153,43 +173,33 @@ export class PersonaService {
     };
   }
 
+  getCurrentSession(sessionId: string) {
+    return this.prisma.userSession.findUnique({ where: { sessionId }, select: { sessionId: true, userId: true, personaId: true, startedAt: true, lastActivityAt: true } });
+  }
+
+  endSession(sessionId: string) {
+    return this.prisma.userSession.deleteMany({ where: { sessionId } });
+  }
+
   /**
    * KST 날짜 문자열 생성 (YYYY-MM-DD)
    */
   private getKstDateString(): string {
-    const now = new Date();
-    const kstTime = new Date(now.toLocaleString('ko-KR', { timeZone: 'Asia/Seoul' }));
-    const year = kstTime.getFullYear();
-    const month = String(kstTime.getMonth() + 1).padStart(2, '0');
-    const day = String(kstTime.getDate()).padStart(2, '0');
-    return `${year}-${month}-${day}`;
-  }
-
-  /**
-   * 랜덤 난이도 선택
-   */
-  private getRandomDifficulty(): string {
-    const difficulties = ['easy', 'normal', 'hard'];
-    return difficulties[Math.floor(Math.random() * difficulties.length)];
-  }
-
-  /**
-   * 난이도별 보상
-   */
-  private getQuestRewards(difficulty: string): { exp: number; gold: number } {
-    const rewards = {
-      easy: { exp: 50, gold: 25 },
-      normal: { exp: 100, gold: 50 },
-      hard: { exp: 200, gold: 100 },
-    };
-    return rewards[difficulty as keyof typeof rewards] || rewards.normal;
+    const parts = new Intl.DateTimeFormat('en-US', {
+      timeZone: 'Asia/Seoul',
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+    }).formatToParts(new Date());
+    const values = Object.fromEntries(parts.map((part) => [part.type, part.value]));
+    return `${values.year}-${values.month}-${values.day}`;
   }
 
   /**
    * 기본 카테고리 조회 또는 생성
    */
-  private async getOrCreateCategories() {
-    const categoryNames = ['독서', '운동', '공부', '명상', '그림'];
+  private async getOrCreateCategories(habits: string[]) {
+    const categoryNames = habits.length > 0 ? [...new Set(habits)] : ['독서', '운동', '공부'];
     const categories = [];
 
     for (const name of categoryNames) {

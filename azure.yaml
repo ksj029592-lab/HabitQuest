@@ -1,0 +1,21 @@
+name: habitquest
+metadata:
+  template: habitquest-aca
+services:
+  api:
+    project: ./backend
+    host: containerapp
+    language: docker
+    docker:
+      path: Dockerfile
+      context: .
+  web:
+    project: ./frontend
+    host: containerapp
+    language: docker
+    docker:
+      path: Dockerfile
+      context: .
+infra:
+  provider: bicep
+  path: ./infra/azd

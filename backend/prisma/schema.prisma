@@ -5,7 +5,8 @@ datasource db {
 }
 
 generator client {
-  provider = "prisma-client-js"
+  provider      = "prisma-client-js"
+  binaryTargets = ["native", "linux-musl-openssl-3.0.x"]
 }
 
 // 테스트 페르소나 정의
@@ -29,6 +30,7 @@ model UserSession {
   id              String   @id @default(cuid())
   personaId       String
   sessionId       String   @unique
+  userId          String?
   startedAt       DateTime @default(now())
   lastActivityAt  DateTime @updatedAt
   
@@ -42,6 +44,17 @@ model User {
   level           Int      @default(1)
   totalExp        Int      @default(0)
   gold            Int      @default(0)
+  habits          String[] @default([])
+  note            String   @default("")
+  preferredDifficulty String @default("normal")
+  equippedTitle   String?
+  equippedBorder  String?
+  equippedDecoration String?
+  specialAvatarId String?
+  avatarIndex     Int      @default(0)
+  reminderEnabled Boolean  @default(false)
+  reminderTime    String   @default("20:00")
+  reminderLastDateKst String?
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
   
@@ -52,6 +65,8 @@ model User {
   purchases       ShopPurchaseLog[]
   pointLogs       RankingPointLog[]
   rewards         SeasonRewardLog[]
+  levelRewards    LevelRewardClaim[]
+  dayRewards      DayRewardClaim[]
   
   @@unique([personaId, id])
   @@map("users")
@@ -83,6 +98,9 @@ model DailyQuest {
   goldReward      Int
   slotNo          Int      // 0, 1, 2
   completedAt     DateTime?
+  verificationQuestion String?
+  verificationAnswer String?
+  verificationFeedback String?
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
   
@@ -146,6 +164,7 @@ model Inventory {
   id              String   @id @default(cuid())
   userId          String
   itemType        String   // 'protection_ticket' | 'cosmetic'
+  itemId          String   @default("default")
   rarity          String?  // 'common' | 'rare' | 'epic' | 'legendary'
   quantity        Int      @default(0)
   createdAt       DateTime @default(now())
@@ -153,7 +172,7 @@ model Inventory {
   
   user            User     @relation(fields: [userId], references: [id], onDelete: Cascade)
   
-  @@unique([userId, itemType, rarity])
+  @@unique([userId, itemType, itemId])
   @@map("inventory")
 }
 
@@ -162,6 +181,7 @@ model ShopPurchaseLog {
   id              String   @id @default(cuid())
   userId          String
   itemType        String   // 'protection_ticket' | 'cosmetic'
+  itemId          String?
   priceGold       Int
   quantity        Int      @default(1)
   weekKeyKst      String   // YYYY-Www format (ISO week)
@@ -171,6 +191,28 @@ model ShopPurchaseLog {
   
   @@index([userId, weekKeyKst, itemType])
   @@map("shop_purchase_logs")
+}
+
+model LevelRewardClaim {
+  id          String   @id @default(cuid())
+  userId      String
+  level       Int
+  claimedAt   DateTime @default(now())
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, level])
+  @@map("level_reward_claims")
+}
+
+model DayRewardClaim {
+  id          String   @id @default(cuid())
+  userId      String
+  days        Int
+  claimedAt   DateTime @default(now())
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, days])
+  @@map("day_reward_claims")
 }
 
 // 랭킹 시즌

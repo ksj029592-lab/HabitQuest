@@ -4,6 +4,7 @@
 import React, { useState, useEffect } from 'react';
 import { TestPersona, ApiResponse } from '@types';
 import { Card, Button } from '.';
+import { Award, CheckCheck, Coins, Flame, Frame, ShieldCheck } from 'lucide-react';
 
 interface PersonaSelectorProps {
   onPersonaSelected: (persona: TestPersona) => void;
@@ -149,20 +150,20 @@ export const PersonaSelector: React.FC<PersonaSelectorProps> = ({
               <div className="grid grid-cols-3 gap-4 pt-4 border-t border-gray-200 dark:border-gray-800">
                 <div className="text-center">
                   <div className="text-sm text-gray-600 dark:text-gray-400">연속</div>
-                  <div className="text-lg font-semibold text-black dark:text-white">
-                    🔥 {persona.initialStreak}
+                  <div className="text-lg font-semibold text-black dark:text-white flex items-center justify-center gap-1.5">
+                    <Flame size={18} strokeWidth={1.6} aria-hidden="true" /> {persona.initialStreak}
                   </div>
                 </div>
                 <div className="text-center">
                   <div className="text-sm text-gray-600 dark:text-gray-400">골드</div>
-                  <div className="text-lg font-semibold text-yellow-500">
-                    💰 {persona.initialGold}
+                  <div className="text-lg font-semibold text-yellow-500 flex items-center justify-center gap-1.5">
+                    <Coins size={18} strokeWidth={1.6} aria-hidden="true" /> {persona.initialGold}
                   </div>
                 </div>
                 <div className="text-center">
                   <div className="text-sm text-gray-600 dark:text-gray-400">퀘스트</div>
-                  <div className="text-lg font-semibold text-purple-500">
-                    ✨ {persona.initialStats.totalQuestsCompleted}
+                  <div className="text-lg font-semibold text-teal-700 flex items-center justify-center gap-1.5">
+                    <CheckCheck size={18} strokeWidth={1.6} aria-hidden="true" /> {persona.initialStats.totalQuestsCompleted}
                   </div>
                 </div>
               </div>
@@ -171,18 +172,18 @@ export const PersonaSelector: React.FC<PersonaSelectorProps> = ({
                 <p className="text-xs text-gray-600 dark:text-gray-400 mb-3">보유 아이템 & 착용 중</p>
                 <div className="space-y-2">
                   <div className="flex justify-between items-center text-sm">
-                    <span className="text-gray-700 dark:text-gray-300">🛡️ 방지권</span>
+                    <span className="text-gray-700 dark:text-gray-300 inline-flex items-center gap-2"><ShieldCheck size={16} strokeWidth={1.6} aria-hidden="true" />방지권</span>
                     <span className="font-semibold text-blue-500">{persona.protectionTickets}개</span>
                   </div>
                   {persona.equippedTitle && (
                     <div className="flex justify-between items-center text-sm">
-                      <span className="text-gray-700 dark:text-gray-300">🏅 칭호</span>
+                      <span className="text-gray-700 dark:text-gray-300 inline-flex items-center gap-2"><Award size={16} strokeWidth={1.6} aria-hidden="true" />칭호</span>
                       <span className="font-semibold text-purple-500">{persona.equippedTitle}</span>
                     </div>
                   )}
                   {persona.equippedBorder && (
                     <div className="flex justify-between items-center text-sm">
-                      <span className="text-gray-700 dark:text-gray-300">🎨 테두리</span>
+                      <span className="text-gray-700 dark:text-gray-300 inline-flex items-center gap-2"><Frame size={16} strokeWidth={1.6} aria-hidden="true" />테두리</span>
                       <span className="font-semibold text-emerald-500">{persona.equippedBorder}</span>
                     </div>
                   )}

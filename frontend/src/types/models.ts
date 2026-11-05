@@ -56,6 +56,9 @@ export interface PersonaGameState {
     difficulty?: 'easy' | 'normal' | 'hard';
   };
   totalAttendanceDays?: number;
+  expPerLevel?: number;
+  reminderEnabled?: boolean;
+  reminderTime?: string;
 }
 
 /** 연속 달성 데이터 */
@@ -76,6 +79,7 @@ export interface AttendanceData {
 
 /** 인벤토리 아이템 */
 export interface InventoryItem {
+  itemId?: string;
   itemType: 'protection_ticket' | 'reroll_ticket' | 'cosmetic';
   rarity?: 'common' | 'rare' | 'epic' | 'legendary';
   quantity: number;
@@ -102,6 +106,11 @@ export interface DailyQuest {
   status: 'pending' | 'completed';
   expReward: number;
   goldReward: number;
+  rankingPointReward?: number;
+  rankingPointAwarded?: number;
+  verificationQuestion?: string;
+  verificationAnswer?: string;
+  verificationFeedback?: string;
   completedAt?: string; // ISO8601
   slotNo: 0 | 1 | 2;
 }
@@ -147,11 +156,15 @@ export interface ApiResponse<T> {
 /** 페르소나 선택 요청 */
 export interface SelectPersonaRequest {
   personaId: string;
+  habits?: string[];
+  note?: string;
+  difficulty?: 'easy' | 'normal' | 'hard';
 }
 
 /** 퀘스트 완료 요청 */
 export interface CompleteQuestRequest {
   questId: string;
+  answer: string;
   idempotencyKey?: string;
 }
 

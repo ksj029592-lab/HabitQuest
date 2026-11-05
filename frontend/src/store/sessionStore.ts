@@ -2,6 +2,7 @@
  * 페르소나/세션 상태 관리
  */
 import { create } from 'zustand';
+import { persist } from 'zustand/middleware';
 import { TestPersona, UserSession, PersonaGameState, DailyQuest } from '@types';
 
 interface SessionStore {
@@ -17,7 +18,9 @@ interface SessionStore {
   currentGameState: () => PersonaGameState | null;
 }
 
-export const useSessionStore = create<SessionStore>((set, get) => ({
+export const useSessionStore = create<SessionStore>()(
+  persist(
+    (set, get) => ({
   session: null,
   isSessionActive: false,
 
@@ -49,4 +52,10 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
 
   currentPersona: () => get().session?.personaData.persona || null,
   currentGameState: () => get().session?.personaData || null,
-}));
+    }),
+    {
+      name: 'habitquest-session',
+      partialize: (state) => ({ session: state.session, isSessionActive: state.isSessionActive }),
+    },
+  ),
+);

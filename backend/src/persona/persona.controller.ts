@@ -1,7 +1,8 @@
 /**
  * 페르소나 컨트롤러
  */
-import { Controller, Get, Post, Body, BadRequestException, InternalServerErrorException } from '@nestjs/common';
+import { Controller, Get, Post, Body, Headers, BadRequestException, InternalServerErrorException } from '@nestjs/common';
+import { Public } from '@/common/session.guard';
 import { ApiOperation, ApiResponse, ApiTags } from '@nestjs/swagger';
 import { PersonaService } from './persona.service';
 import { CreateSessionDto, PersonaResponseDto, SessionResponseDto } from './persona.dto';
@@ -15,6 +16,7 @@ export class PersonaController {
    * 테스트 페르소나 목록 조회
    */
   @Get('personas')
+  @Public()
   @ApiOperation({
     summary: '페르소나 목록 조회',
     description: '플레이 가능한 테스트 페르소나 3개 조회',
@@ -36,6 +38,7 @@ export class PersonaController {
    * 세션 시작 (페르소나 선택)
    */
   @Post('session/start')
+  @Public()
   @ApiOperation({
     summary: '게임 세션 시작',
     description: '페르소나를 선택하고 새 세션을 시작합니다',
@@ -47,7 +50,7 @@ export class PersonaController {
     }
 
     try {
-      const session = await this.personaService.createSession(dto.personaId);
+      const session = await this.personaService.createSession(dto);
       return {
         success: true,
         data: session,
@@ -66,10 +69,10 @@ export class PersonaController {
     description: '현재 활성 세션의 정보를 조회합니다 (실제로는 클라이언트에서 관리)',
   })
   @ApiResponse({ status: 200, type: SessionResponseDto })
-  async getCurrentSession() {
+  async getCurrentSession(@Headers('authorization') authorization: string) {
     return {
       success: true,
-      data: null, // 클라이언트 세션 기반
+      data: await this.personaService.getCurrentSession(authorization.slice(7)),
     };
   }
 
@@ -82,7 +85,8 @@ export class PersonaController {
     description: '현재 세션을 종료합니다',
   })
   @ApiResponse({ status: 200 })
-  async endSession() {
+  async endSession(@Headers('authorization') authorization: string) {
+    await this.personaService.endSession(authorization.slice(7));
     return {
       success: true,
       data: { message: '세션이 종료되었습니다' },

@@ -1,11 +1,24 @@
 /**
  * 페르소나 DTO
  */
-import { IsString, IsNumber, IsArray, IsOptional } from 'class-validator';
+import { IsString, IsNumber, IsArray, IsOptional, IsIn } from 'class-validator';
 
 export class CreateSessionDto {
   @IsString()
   personaId: string;
+
+  @IsOptional()
+  @IsArray()
+  @IsString({ each: true })
+  habits?: string[];
+
+  @IsOptional()
+  @IsString()
+  note?: string;
+
+  @IsOptional()
+  @IsIn(['easy', 'normal', 'hard'])
+  difficulty?: 'easy' | 'normal' | 'hard';
 }
 
 export class PersonaResponseDto {

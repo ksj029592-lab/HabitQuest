@@ -1,11 +1,38 @@
 /**
  * 퀘스트 DTO
  */
-import { IsString, IsNumber, IsEnum } from 'class-validator';
+import { IsString, IsNumber, IsEnum, IsArray, IsIn, IsOptional, MinLength, MaxLength, ArrayMaxSize } from 'class-validator';
 
 export class CompleteQuestDto {
   @IsString()
   questId: string;
+
+  @IsString()
+  @MinLength(1)
+  @MaxLength(2000)
+  answer: string;
+}
+
+export class RerollQuestsDto {
+  @IsString()
+  @MaxLength(80)
+  personaName: string;
+
+  @IsArray()
+  @ArrayMaxSize(8)
+  @IsString({ each: true })
+  habits: string[];
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(500)
+  note?: string;
+}
+
+export class EnsureDailyQuestsDto extends RerollQuestsDto {
+  @IsOptional()
+  @IsIn(['easy', 'normal', 'hard'])
+  difficulty?: 'easy' | 'normal' | 'hard';
 }
 
 export class QuestResponseDto {
@@ -19,6 +46,11 @@ export class QuestResponseDto {
   status: string;
   expReward: number;
   goldReward: number;
+  rankingPointReward: number;
+  rankingPointAwarded?: number;
+  verificationQuestion?: string;
+  verificationAnswer?: string;
+  verificationFeedback?: string;
   completedAt?: string;
   slotNo: number;
 }

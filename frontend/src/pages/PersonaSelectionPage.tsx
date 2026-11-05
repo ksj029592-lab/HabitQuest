@@ -5,7 +5,7 @@ import React, { useCallback, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { PersonaSelector } from '@components';
 import { useSessionStore } from '@store';
-import { aiApi } from '@api';
+import { personaApi } from '@api';
 import { useQuestStore } from '@store';
 import { TestPersona, UserSession } from '@types';
 
@@ -18,6 +18,7 @@ export const PersonaSelectionPage: React.FC = () => {
   const [note, setNote] = useState('');
   const [difficulty, setDifficulty] = useState<'easy' | 'normal' | 'hard'>('normal');
   const [isGenerating, setIsGenerating] = useState(false);
+  const [sessionError, setSessionError] = useState('');
 
   const habitOptions = ['운동과 건강', '독서와 학습', '집중력과 생산성', '마음 챙김', '수면 습관', '정리와 생활'];
 
@@ -32,17 +33,17 @@ export const PersonaSelectionPage: React.FC = () => {
   const handleGenerate = useCallback(async () => {
     if (!selectedPersona || habits.length === 0 || isGenerating) return;
     setIsGenerating(true);
+    setSessionError('');
     try {
+      let serverResponse: Awaited<ReturnType<typeof personaApi.selectPersona>> | null = null;
       try {
-        const response = await aiApi.generateQuests({
-          personaName: selectedPersona.name,
+        serverResponse = await personaApi.selectPersona(selectedPersona.id, {
           habits,
           note,
           difficulty,
         });
-        if (response.success && response.data?.length) setQuests(response.data);
       } catch (error) {
-        console.error('AI quest generation failed; HomePage fallback will be used:', error);
+        throw new Error('서버 세션을 시작하지 못했어요. 백엔드·DB·AI 연결을 확인해 주세요.');
       }
 
         // Mock 세션 생성 (사용자 요구사항 userPreferences 포함)
@@ -104,8 +105,26 @@ export const PersonaSelectionPage: React.FC = () => {
           },
         };
         
-      setSession(mockSession);
+      if (serverResponse?.success && serverResponse.data) {
+        setQuests([]);
+        setSession({
+          ...serverResponse.data,
+          lastActivityAt: new Date().toISOString(),
+          personaData: {
+            ...serverResponse.data.personaData,
+            userPreferences: {
+              habits,
+              note,
+              difficulty,
+            },
+          },
+        });
+      } else {
+        throw new Error(serverResponse?.error?.message || '서버 세션 생성에 실패했습니다.');
+      }
       navigate('/home');
+    } catch (error) {
+      setSessionError(error instanceof Error ? error.message : '세션 생성에 실패했습니다.');
     } finally {
       setIsGenerating(false);
     }
@@ -150,6 +169,7 @@ export const PersonaSelectionPage: React.FC = () => {
 
         <div className="fixed bottom-0 left-0 right-0 z-50 border-t border-gray-200 dark:border-gray-800 bg-gray-50/95 dark:bg-gray-950/95 px-6 pt-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] backdrop-blur-md shadow-[0_-8px_24px_rgba(0,0,0,0.08)]">
           <div className="max-w-md mx-auto">
+          {sessionError && <p role="alert" className="text-sm text-red-600 mb-3">{sessionError}</p>}
           {habits.length > 0 && (
             <p className="text-xs text-gray-500 dark:text-gray-400 text-center mb-2">
               {habits.length}개 습관 선택됨{note.trim() ? ' • 맞춤 요청 입력됨' : ' • 자유 요청은 선택 사항'}

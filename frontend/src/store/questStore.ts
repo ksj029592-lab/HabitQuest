@@ -2,6 +2,7 @@
  * 퀘스트 상태 관리
  */
 import { create } from 'zustand';
+import { persist } from 'zustand/middleware';
 import { DailyQuest } from '@types';
 
 interface QuestStore {
@@ -16,7 +17,9 @@ interface QuestStore {
   setError: (error: string | null) => void;
 }
 
-export const useQuestStore = create<QuestStore>((set) => ({
+export const useQuestStore = create<QuestStore>()(
+  persist(
+    (set) => ({
   quests: [],
   loading: false,
   error: null,
@@ -39,4 +42,7 @@ export const useQuestStore = create<QuestStore>((set) => ({
 
   setLoading: (loading: boolean) => set({ loading }),
   setError: (error: string | null) => set({ error }),
-}));
+    }),
+    { name: 'habitquest-quests', partialize: (state) => ({ quests: state.quests }) },
+  ),
+);
