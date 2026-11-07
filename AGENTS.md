@@ -24,6 +24,10 @@
 
 ## Azure 및 배포
 
+- 후속 맞춤형 습관은 `habit/` 모듈과 `user_habits`의 고유 ID를 사용합니다. 이름 변경·보관에서 기록을 삭제하지 않습니다. `scheduleHistory`의 과거 버전은 수정하지 않고, 일반 일정은 다음 KST 날짜, 주간 일정 전환·목표 변경은 다음 월요일에 적용합니다. 주간 목표는 서로 다른 실천 날짜 수로 평가합니다.
+- 오늘 생성된 퀘스트는 습관 설정 변경으로 다시 만들지 않습니다. 새 생성과 리롤은 활성·오늘 실천 가능한 습관마다 한 개씩 최대 3개를 만듭니다. 후보가 없으면 AI를 호출하지 않습니다. 복구 코드·회원가입·로그인 UI는 추가하지 않습니다.
+- `prisma/custom-habits-upgrade.sql`은 격리 DB에서 검증한 추가 스키마 변경입니다. 운영에는 아직 적용하지 않았습니다. 배포 전 별도 승인과 [맞춤형 습관 릴리스 계획](docs/custom-habits.md)의 스키마 선행 적용이 필요합니다.
+
 - GitHub Actions OIDC → 기존 ACR → 기존 API·웹 Container App 이미지 업데이트 경로를 사용합니다. 리소스 그룹, 리전, Container Apps Environment, 인그레스, 두 앱 간 라우팅, PostgreSQL, Foundry 및 운영 URL을 유지합니다. 세부 절차는 [배포 문서](docs/deployment.md)를 따릅니다.
 - Model Router는 백엔드에서 `FOUNDRY_MODEL_ROUTER_ENDPOINT`와 `FOUNDRY_MODEL_ROUTER_DEPLOYMENT`로 연결합니다. Azure에서는 기존 사용자 할당 관리 ID와 Entra RBAC를 사용합니다. 로컬에서는 필요한 경우 기존 Azure CLI 자격 증명을 사용할 수 있습니다. 유료 추론 호출은 별도 승인 후 실행합니다.
 - 토큰, API 키, DB 연결 문자열, 환경 파일 및 Azure Secret 값을 출력하거나 커밋하지 않습니다. Actions OIDC 식별자와 운영 DB Secret의 관리 경계를 지킵니다.

@@ -104,6 +104,7 @@ export const userApi = {
   savePhoto: (userId: string, jpeg: string) => apiClient.post<{ jpeg: string | null }>('/users/me/avatar', { jpeg }, { headers: { 'x-user-id': userId } }),
   removePhoto: (userId: string) => apiClient.post<{ jpeg: string | null }>('/users/me/avatar/remove', {}, { headers: { 'x-user-id': userId } }),
   updatePreferences: (input: NonNullable<PersonaGameState['userPreferences']>) => apiClient.post<NonNullable<PersonaGameState['userPreferences']>>('/users/me/preferences', { ...input, note: input.note || '' }),
+  updateQuestPreferences: (input: { note: string; difficulty: string }) => apiClient.post('/users/me/quest-preferences', input),
   updateReminder: (input: { enabled: boolean; time: string }) => apiClient.post<{ enabled: boolean; time: string }>('/users/me/reminders', input),
   checkReminder: () => apiClient.post<{ notify: boolean; pending?: number; date?: string }>('/users/me/reminders/check', {}),
   getActivityOverview: () => apiClient.get<ActivityOverview>('/users/me/activity'),

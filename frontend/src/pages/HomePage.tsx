@@ -312,7 +312,7 @@ const SessionHome = ({ session }: { session: UserSession }) => {
           <QuestDashboard persona={personaData} quests={todayQuests} loading={loading} rerolling={rerolling}
             error={dailyError} expired={expired} onRetry={() => setConnectionAttempt((value) => value + 1)}
             onRestart={handleLogout} onReroll={handleUseRerollTicket} onComplete={setVerificationQuest}
-            onShop={() => setActiveTab('shop')} />
+            onShop={() => setActiveTab('shop')} onHabits={() => { setActiveTab('profile'); requestAnimationFrame(() => document.getElementById('habit-manager-title')?.scrollIntoView({ block: 'start' })); }} />
         )}
 
         {/* ================= 탭 2: 통계 ================= */}

@@ -17,10 +17,10 @@ describe('PersonaService', () => {
       totalQuestCompleted: 0,
       monthlySuccessRate: 0,
     };
-    const generatedQuests: GeneratedQuest[] = [0, 1, 2].map((slotNo) => ({
+    const generatedQuests: GeneratedQuest[] = [0].map((slotNo) => ({
       id: `generated-${slotNo}`,
       userId: 'demo-user',
-      categoryId: 'health',
+      categoryId: '운동과 건강',
       questDateKst: '2026-10-18',
       difficulty: 'easy',
       title: `맞춤 운동 퀘스트 ${slotNo + 1}`,
@@ -36,6 +36,7 @@ describe('PersonaService', () => {
       user: { create: jest.fn().mockResolvedValue({ id: 'user-1', level: 1, totalExp: 0, gold: 0 }) },
       streak: { create: jest.fn() },
       inventory: { create: jest.fn() },
+      userHabit: { create: jest.fn().mockResolvedValue({id:'habit-1',name:'운동과 건강'}) },
       habitCategory: {
         upsert: jest.fn().mockImplementation(({ where }) => ({ id: `category-${where.name}` })),
       },
@@ -71,6 +72,7 @@ describe('PersonaService', () => {
     expect(aiService.generateQuests).toHaveBeenCalledWith({
       personaName: '초심자',
       habits: ['운동과 건강'],
+      count: 1,
       note: '',
       difficulty: 'easy',
     });
@@ -84,6 +86,6 @@ describe('PersonaService', () => {
         slotNo: 0,
       }),
     });
-    expect(transaction.dailyQuest.create).toHaveBeenCalledTimes(3);
+    expect(transaction.dailyQuest.create).toHaveBeenCalledTimes(1);
   });
 });

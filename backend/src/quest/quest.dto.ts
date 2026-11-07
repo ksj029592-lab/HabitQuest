@@ -36,6 +36,7 @@ export class EnsureDailyQuestsDto extends RerollQuestsDto {
 }
 
 export class QuestResponseDto {
+  habitId?: string;
   id: string;
   userId: string;
   categoryId: string;

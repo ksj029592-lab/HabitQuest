@@ -52,6 +52,26 @@ describe('AiService', () => {
   });
 
   describe('generateQuests', () => {
+    it('generates one quest for one eligible habit and validates its category', async () => {
+      const router = new ModelRouterClient();
+      jest.spyOn(router, 'isConfigured').mockReturnValue(true);
+      const complete = jest.spyOn(router, 'completeJson').mockResolvedValue({ quests: [{ title: '영어 문장 3개 읽기', description: '5분 동안 읽고 한 문장을 기록하세요.', categoryId: '영어', expReward: 99999, goldReward: -100 }] });
+      const service = new AiService(router);
+      const input = { personaName: '초심자', habits: ['영어'], count: 1, difficulty: 'easy' as const };
+      const result = await service.generateQuests(input);
+      expect(result).toHaveLength(1);
+      expect(result[0]).toMatchObject({ categoryId: '영어', difficulty: 'easy', expReward: 250, goldReward: 20 });
+      complete.mockResolvedValueOnce({ quests: [{ title: '운동', description: '달리기', categoryId: '미등록 습관' }] });
+      await expect(service.generateQuests(input)).rejects.toThrow('Router의 퀘스트 응답');
+    });
+
+    it('does not invoke AI or invent habits for an empty candidate list', async () => {
+      const router = new ModelRouterClient();
+      const complete = jest.spyOn(router, 'completeJson');
+      await expect(new AiService(router).generateQuests({ personaName: '테스트', habits: [], count: 0 })).resolves.toEqual([]);
+      expect(complete).not.toHaveBeenCalled();
+    });
+
     it('normalizes Router quests to the selected difficulty', async () => {
       const router = new ModelRouterClient();
       jest.spyOn(router, 'isConfigured').mockReturnValue(true);

@@ -3,6 +3,8 @@ import { DailyQuest, PersonaGameState } from '@types';
 import { FieldIcon, TrailSketch } from './FieldArt';
 import { Button } from './Button';
 import { QuestCard } from './QuestCard';
+import { AvatarFrame } from './AvatarFrame';
+import { DailySummary } from './DailySummary';
 
 interface QuestDashboardProps {
   persona: PersonaGameState;
@@ -16,9 +18,10 @@ interface QuestDashboardProps {
   onReroll: () => void;
   onComplete: (quest: DailyQuest) => void;
   onShop: () => void;
+  onHabits: () => void;
 }
 
-export function QuestDashboard({ persona, quests, loading, rerolling, error, expired, onRetry, onRestart, onReroll, onComplete, onShop }: QuestDashboardProps) {
+export function QuestDashboard({ persona, quests, loading, rerolling, error, expired, onRetry, onRestart, onReroll, onComplete, onShop, onHabits }: QuestDashboardProps) {
   const pending = quests.filter((quest) => quest.status === 'pending');
   const completed = quests.filter((quest) => quest.status === 'completed');
   const percent = quests.length ? Math.round(completed.length / quests.length * 100) : 0;
@@ -54,6 +57,8 @@ export function QuestDashboard({ persona, quests, loading, rerolling, error, exp
         <div><FieldIcon name="flame" /><span>연속 달성<strong>{persona.streak.currentStreak}<small>일</small></strong></span></div>
         <div><FieldIcon name="coin" /><span>보유 골드<strong>{persona.gold.toLocaleString()}<small> G</small></strong></span></div>
       </div>
+      {!loading && !error && <DailySummary key={quests[0]?.questDateKst} quests={quests} userId={persona.userId} streak={persona.streak.currentStreak} />}
+      <div className="hq-habit-quicklink"><span>오늘 가능한 습관마다 1개씩, 최대 3개의 퀘스트를 만들어요.</span><button type="button" className="hq-text-button" onClick={onHabits}>내 습관 관리 <ArrowRight size={15} /></button></div>
 
       <div className="hq-quest-workspace">
         <section aria-labelledby="daily-quests-title">
@@ -71,7 +76,7 @@ export function QuestDashboard({ persona, quests, loading, rerolling, error, exp
           </div> : <div className="hq-empty-state">
             {quests.length ? <CheckCheck size={28} className="mx-auto mb-3" aria-hidden="true" /> : <ListChecks size={28} className="mx-auto mb-3" aria-hidden="true" />}
             <h4>{quests.length ? '오늘의 퀘스트를 모두 마쳤어요!' : '아직 생성된 퀘스트가 없어요.'}</h4>
-            {!quests.length && <Button size="small" onClick={onRetry}>오늘의 퀘스트 불러오기</Button>}
+            {!quests.length && <><p>활성 습관과 실천 요일을 확인하거나 새로운 습관을 추가해 주세요.</p><Button size="small" onClick={onHabits}>습관 관리하기</Button><Button variant="plain" size="small" onClick={onRetry}>오늘의 퀘스트 불러오기</Button></>}
           </div>)}
           {!loading && !error && completed.length > 0 && <div className="hq-completed-section hq-quest-list">
             <h4 className="hq-eyebrow">완료한 퀘스트 {completed.length}개</h4>
@@ -81,6 +86,7 @@ export function QuestDashboard({ persona, quests, loading, rerolling, error, exp
 
         <aside className="hq-journey-aside" aria-label="성장과 보상">
           <section className="hq-journey-card">
+            <div className="hq-growth-avatar"><AvatarFrame avatarIndex={persona.avatarIndex} specialAvatarId={persona.specialAvatarId} equippedBorder={persona.equippedBorder} equippedDecoration={persona.equippedDecoration} size="sm" /><span>Lv.{persona.level} · {persona.equippedTitle || '나의 성장'}</span></div>
             <h3>다음 레벨까지</h3>
             <p className="hq-xp-value">{(expPerLevel - currentExp).toLocaleString()} <small>XP 남음</small></p>
             <progress max={expPerLevel} value={currentExp} aria-label="다음 레벨 경험치 진행률" />

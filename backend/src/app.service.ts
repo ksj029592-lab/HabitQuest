@@ -22,6 +22,7 @@ export class AppService {
         LIMIT 0
       `;
       await this.prisma.$queryRaw`SELECT "jpeg" FROM "profile_photos" LIMIT 0`;
+      await this.prisma.$queryRaw`SELECT h."scheduleHistory", q."habitId", q."habitSnapshot" FROM "user_habits" h, "daily_quests" q LIMIT 0`;
     } catch {
       throw new ServiceUnavailableException('Database schema is not ready');
     }

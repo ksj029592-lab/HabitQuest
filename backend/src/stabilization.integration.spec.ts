@@ -1,4 +1,6 @@
 import { randomUUID } from 'node:crypto';
+import { execFileSync } from 'node:child_process';
+import { resolve } from 'node:path';
 import { INestApplication, ServiceUnavailableException, ValidationPipe } from '@nestjs/common';
 import { Test } from '@nestjs/testing';
 import { settleSeason } from './ranking/season-settlement';
@@ -6,6 +8,8 @@ import request = require('supertest');
 import { AppModule } from './app.module';
 import { ModelRouterClient } from './ai/model-router.client';
 import { PrismaService } from './prisma/prisma.service';
+import { HabitService } from './habit/habit.service';
+import { dailySchedule, kstDate, shiftDate, weekStart } from './habit/schedule';
 
 const testDatabase = process.env.HABITQUEST_TEST_DATABASE_URL;
 const integration = testDatabase ? describe : describe.skip;
@@ -18,16 +22,16 @@ integration('HabitQuest HTTP and isolated PostgreSQL', () => {
   })) };
   const router = {
     isConfigured: () => true,
-    completeJson: jest.fn(async (instruction: string) => {
+    completeJson: jest.fn(async (instruction: string, input: {habits?:string[];count?:number}) => {
       if (instruction.startsWith('Create one')) return { question: '무엇을 배웠나요?' };
       if (instruction.startsWith('Review')) return { approved: true, feedback: '기록을 남겼어요.' };
-      return generation;
+      return { quests: (input.habits ?? ['독서']).slice(0,input.count ?? 3).map((categoryId, i) => ({...generation.quests[i], categoryId})) };
     }),
   };
   let app: INestApplication;
   let prisma: PrismaService;
   const api = () => request(app.getHttpServer());
-  const preferences = { personaName: '테스트', habits: ['독서'], difficulty: 'hard' };
+  const preferences = { personaName: '테스트', habits: ['독서', '독서2', '독서3'], difficulty: 'hard' };
   const answer = '책을 읽고 기억에 남은 내용을 기록했어요.';
 
   beforeAll(async () => {
@@ -57,7 +61,7 @@ integration('HabitQuest HTTP and isolated PostgreSQL', () => {
 
   const start = async () => {
     const response = await api().post('/session/start')
-      .send({ personaId, habits: ['독서'], difficulty: 'hard' }).expect(201);
+      .send({ personaId, habits: ['독서', '독서2', '독서3'], difficulty: 'hard' }).expect(201);
     expect(response.body.success).toBe(true);
     return { token: `Bearer ${response.body.data.sessionId}`, userId: response.body.data.personaData.userId as string };
   };
@@ -139,10 +143,10 @@ integration('HabitQuest HTTP and isolated PostgreSQL', () => {
     ]);
     expect([second, third, purchase].every(({ body }) => body.success)).toBe(true);
     expect([second.body.data, third.body.data]).toEqual(expect.arrayContaining([
-      expect.objectContaining({ levelUp: 2, goldReward: 0, rewardAdjustments: expect.arrayContaining(['daily_gold_cap', 'repeated_category']) }),
+      expect.objectContaining({ levelUp: 2, goldReward: 0, rewardAdjustments: expect.arrayContaining(['daily_gold_cap']) }),
     ]));
     expect((await get('/quests/daily')).body.data).toEqual(expect.arrayContaining([
-      expect.objectContaining({ goldReward: 0, categoryName: '독서', rewardAdjustments: ['daily_gold_cap'] }),
+      expect.objectContaining({ goldReward: 0, categoryName: expect.any(String), rewardAdjustments: ['daily_gold_cap'] }),
     ]));
     expect((await complete(quests[0])).body.success).toBe(false);
     expect(await prisma.user.findUnique({ where: { id: userId } })).toMatchObject({ gold: 2200, totalExp: 330, level: 2 });
@@ -154,7 +158,7 @@ integration('HabitQuest HTTP and isolated PostgreSQL', () => {
     const ranking = (await get('/ranking/current')).body;
     expect(ranking.data).toEqual(expect.arrayContaining([expect.objectContaining({ userId, equippedDecoration: 'aura', rank: expect.any(Number) })]));
     expect(ranking.season).toMatchObject({ yearMonth: quests[0].questDateKst.slice(0, 7), startAt: expect.any(String), endAt: expect.any(String) });
-    expect((await get('/users/me/activity')).body.data).toMatchObject({ last7: { completed: 3, total: 3, rate: 100 }, topCategory: { name: '독서', completed: 3 } });
+    expect((await get('/users/me/activity')).body.data).toMatchObject({ last7: { completed: 3, total: 3, rate: 100 }, topCategory: { name: '독서', completed: 1 } });
     expect((await get(`/users/me/calendar?month=${quests[0].questDateKst.slice(0, 7)}`)).body.data.achievedDays).toBe(1);
     expect((await get('/users/me/weekly-report')).body.data.totals.completedQuests).toBe(3);
   });
@@ -172,7 +176,8 @@ integration('HabitQuest HTTP and isolated PostgreSQL', () => {
 
     const responses = await Promise.all([post('/quests/daily/ensure', preferences), post('/quests/daily/ensure', preferences)]);
     expect(responses.every(({ body }) => body.success)).toBe(true);
-    expect(responses.filter(({ body }) => body.data.protectionUsed)).toHaveLength(1);
+    // Concurrent callers share the single in-flight result; the ticket is spent only once.
+    expect(responses.some(({ body }) => body.data.protectionUsed)).toBe(true);
     expect(await prisma.dailyQuest.count({ where: { userId, questDateKst: today } })).toBe(3);
     expect(await prisma.inventory.findFirst({ where: { userId, itemType: 'protection_ticket' } })).toMatchObject({ quantity: 0 });
     expect(await prisma.streak.findUnique({ where: { userId } })).toMatchObject({ currentStreak: 4 });
@@ -216,6 +221,82 @@ integration('HabitQuest HTTP and isolated PostgreSQL', () => {
     expect(await prisma.inventory.findFirst({ where: { userId: ids[2] } })).toMatchObject({ itemId: 'season_grove' });
     expect(await prisma.user.findUnique({ where: { id: ids[19] } })).toMatchObject({ gold: 600 });
   });
+
+  it('manages stable habit identities, validates schedules, and preserves quests after edit and archive', async () => {
+    const { token, userId } = await start();
+    const post = (path: string, body: object = {}) => api().post(path).set('Authorization', token).send(body);
+    const before = await prisma.dailyQuest.findMany({ where: { userId } });
+    const input = { name: '영어 공부', description: '문장 소리 내어 읽기', note: '퇴근 후 10분', active: true, mode: 'weekdays', weekdays: [0, 2, 4], weeklyTarget: 3 };
+    await post('/habits', { ...input, weekdays: [0, 0], weeklyTarget: 2 }).expect(400);
+    await post('/habits', { ...input, weeklyTarget: 5 }).expect(400);
+    const created = await post('/habits', input).expect(201);
+    const id = created.body.data.id;
+    await post(`/habits/${id}`, { ...input, name: '짧은 영어', mode: 'weekly', weekdays: [], weeklyTarget: 3 }).expect(201);
+    await post('/habits/not-owned', input).expect(400);
+    const saved = await prisma.userHabit.findUniqueOrThrow({ where: { id } });
+    const history = saved.scheduleHistory as Array<{ from: string; mode: string }>;
+    expect(history[0].mode).toBe('weekdays');
+    expect(history[1]).toMatchObject({ from: shiftDate(weekStart(kstDate()), 7), mode: 'weekly' });
+    expect(await prisma.dailyQuest.findMany({ where: { userId } })).toEqual(before);
+    await post(`/habits/${id}/archive`).expect(201);
+    expect(await prisma.userHabit.findUniqueOrThrow({ where: { id } })).toMatchObject({ archived: true });
+    expect(await prisma.dailyQuest.findMany({ where: { userId } })).toEqual(before);
+    await api().get('/habits').set('Authorization', token).expect(200).expect(({ body }) => {
+      expect(body.data.habits).toEqual(expect.arrayContaining([expect.objectContaining({ id, name: '짧은 영어', archived: true })]));
+      expect(body.data.days).toHaveLength(30);
+    });
+  });
+
+  it('counts practice dates once, preserves historical names and excludes exhausted or inactive habits', async () => {
+    const userId = randomUUID(), today = kstDate(), monday = weekStart(today);
+    await prisma.user.create({ data: { id: userId, personaId } });
+    const habit = await prisma.userHabit.create({ data: { userId, name: '변경된 습관 이름', scheduleHistory: [{ ...dailySchedule(monday), mode: 'weekly', weeklyTarget: 1 }] } });
+    const category = await prisma.habitCategory.upsert({ where: { name: '이전 이름' }, create: { name: '이전 이름' }, update: {} });
+    await prisma.dailyQuest.createMany({ data: [0,1].map((slotNo) => ({ userId, habitId: habit.id, habitSnapshot: { name: '이전 이름' }, categoryId: category.id, questDateKst: monday, title: '이전 실천', description: '', status: 'completed', difficulty: 'easy', expReward: 100, goldReward: 50, slotNo })) });
+    const habits = app.get(HabitService);
+    const report = await habits.overview(userId);
+    expect(report.habits[0].stats).toMatchObject({ total: 2, weeklyCompleted: 1, weeklyTarget: 1, weeklyRate: 100 });
+    expect(await habits.candidates(userId)).toEqual([]);
+    expect((await prisma.dailyQuest.findFirstOrThrow({ where: { userId } })).habitSnapshot).toEqual({ name: '이전 이름' });
+    await prisma.userHabit.update({ where: { id: habit.id }, data: { scheduleHistory: [{ ...dailySchedule(monday), active: false }] } });
+    expect(await habits.candidates(userId)).toEqual([]);
+  });
+
+  it('creates one quest for one habit and makes no paid request when no habits are eligible', async () => {
+    const response = await api().post('/session/start').send({ personaId, habits: ['영어'], difficulty: 'easy' }).expect(201);
+    const userId = response.body.data.personaData.userId;
+    const token = `Bearer ${response.body.data.sessionId}`;
+    const quests = await prisma.dailyQuest.findMany({ where: { userId } });
+    expect(quests).toHaveLength(1);
+    expect(quests[0].habitId).toBeTruthy();
+    await prisma.dailyQuest.updateMany({ where: { userId }, data: { questDateKst: shiftDate(kstDate(), -1) } });
+    await prisma.userHabit.updateMany({ where: { userId }, data: { scheduleHistory: [{ ...dailySchedule(kstDate()), active: false }] } });
+    const calls = router.completeJson.mock.calls.length;
+    await api().post('/quests/daily/ensure').set('Authorization', token).send(preferences).expect(201).expect(({ body }) => {
+      expect(body.data).toMatchObject({ created: false, quests: [] });
+    });
+    expect(router.completeJson).toHaveBeenCalledTimes(calls);
+    await api().get('/habits').expect(401);
+  });
+
+  (process.env.HABITQUEST_MIGRATION_FIXTURE === '1' ? it : it.skip)('preserves legacy balances, inventory, logs and historical links after two SQL upgrade runs', async () => {
+    expect(await prisma.user.findUniqueOrThrow({ where: { id: 'compat-user' } })).toMatchObject({ gold: 77, totalExp: 100, habits: ['독서'] });
+    expect(await prisma.inventory.findUniqueOrThrow({ where: { id: 'compat-inventory' } })).toMatchObject({ quantity: 2 });
+    expect(await prisma.questCompletionLog.findUniqueOrThrow({ where: { id: 'compat-log' } })).toMatchObject({ goldReward: 50, expReward: 100, rankingPointAwarded: 10 });
+    const habits = await prisma.userHabit.findMany({ where: { userId: 'compat-user' } });
+    expect(habits).toHaveLength(2);
+    expect(habits).toEqual(expect.arrayContaining([expect.objectContaining({ name: '독서', archived: false }), expect.objectContaining({ name: '과거 운동', archived: true })]));
+    const quest = await prisma.dailyQuest.findUniqueOrThrow({ where: { id: 'compat-quest' } });
+    expect(quest).toMatchObject({ habitId: habits.find((habit) => habit.name === '독서').id, habitSnapshot: { name: '독서', legacy: true }, status: 'completed' });
+    expect((await app.get(HabitService).overview('compat-user')).habits.reduce((sum, habit) => sum + habit.stats.total, 0)).toBe(2);
+    // A later retry must not recreate the old names after a real user renames/adds habits.
+    await prisma.userHabit.update({ where: { id: quest.habitId }, data: { name: '새 이름' } });
+    await prisma.userHabit.create({ data: { userId: 'compat-user', name: '새 습관', scheduleHistory: [dailySchedule(kstDate())] } });
+    await prisma.user.update({ where: { id: 'compat-user' }, data: { habits: ['새 이름', '새 습관'] } });
+    execFileSync(process.execPath, [resolve('node_modules/prisma/build/index.js'), 'db', 'execute', '--file', resolve('prisma/custom-habits-upgrade.sql')], { env: process.env, stdio: 'pipe', timeout: 15000 });
+    expect(await prisma.userHabit.count({ where: { userId: 'compat-user' } })).toBe(3);
+    expect((await prisma.dailyQuest.findUniqueOrThrow({ where: { id: 'compat-quest' } })).habitId).toBe(quest.habitId);
+  }, 20000);
 
   it('limits public signup attempts before invoking AI again', async () => {
     const calls = router.completeJson.mock.calls.length;

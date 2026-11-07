@@ -5,7 +5,7 @@ import { Button } from './Button';
 
 const weekdays = ['월', '화', '수', '목', '금', '토', '일'];
 
-function DayHeatmap({ days, today }: Pick<ActivityOverview, 'days' | 'today'>) {
+export function DayHeatmap({ days, today }: { days: (ActivityDay & { quests?: { id: string; title: string; status: string }[] })[]; today: string }) {
   const [selected, setSelected] = useState(today);
   const [preview, setPreview] = useState<string | null>(null);
   const offset = (new Date(days[0].date + 'T00:00:00Z').getUTCDay() + 6) % 7;
@@ -34,6 +34,7 @@ function DayHeatmap({ days, today }: Pick<ActivityOverview, 'days' | 'today'>) {
       <div className="hq-heatmap-detail" aria-live={preview ? 'off' : 'polite'}>
         <time dateTime={current.date}>{current.date}</time><strong>{label(current)}</strong>
       </div>
+      {current.quests && <ul className="hq-heatmap-quests">{current.quests.map((quest) => <li key={quest.id}>{quest.status === 'completed' ? '완료' : '미완료'} · {quest.title}</li>)}{!current.quests.length && <li>이 날짜에는 생성된 퀘스트가 없어요.</li>}</ul>}
     </section>
   );
 }
@@ -65,7 +66,6 @@ export function ActivityOverviewPanel({ totalCompleted, currentStreak }: { total
         <div className="hq-journey-card"><ChartNoAxesCombined size={18} aria-hidden="true" /><span>누적 완료</span><strong>{totalCompleted.toLocaleString()}<small>개</small></strong></div>
         <div className="hq-journey-card"><Flame size={18} aria-hidden="true" /><span>연속 달성</span><strong>{currentStreak}<small>일</small></strong></div>
       </div>
-      <DayHeatmap key={data.today} today={data.today} days={data.days} />
       <div className="hq-activity-highlight"><Sprout size={21} aria-hidden="true" /><div><span>최근 30일 가장 많이 완료한 습관</span><strong>{data.topCategory ? `${data.topCategory.name} · ${data.topCategory.completed}개 완료` : '아직 완료한 습관이 없어요.'}</strong></div></div>
     </div>
   );

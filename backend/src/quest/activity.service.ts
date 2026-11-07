@@ -2,6 +2,7 @@ import { BadRequestException, Injectable } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { PrismaService } from '@/prisma/prisma.service';
 import { COSMETICS, DAY_MILESTONES } from '@/common/game-catalog';
+import { createInitialHabits } from '@/habit/habit.service';
 
 type ReportQuest = Prisma.DailyQuestGetPayload<{ include: { category: true; completionLog: true } }>;
 
@@ -63,11 +64,22 @@ export class ActivityService {
   }
 
   updatePreferences(userId: string, input: { habits: string[]; note: string; difficulty: string }) {
-    return this.prisma.user.update({ where: { id: userId }, data: { habits: [...new Set(input.habits.map((habit) => habit.trim()).filter(Boolean))], note: input.note.trim(), preferredDifficulty: input.difficulty } });
+    const names = [...new Set(input.habits.map((habit) => habit.trim()).filter(Boolean))];
+    return this.prisma.$transaction(async (tx) => {
+      const user = await tx.user.update({ where: { id: userId }, data: { habits: names, note: input.note.trim(), preferredDifficulty: input.difficulty } });
+      const existing = await tx.userHabit.findMany({ where: { userId } });
+      await createInitialHabits(tx, userId, names.filter((name) => !existing.some((habit) => habit.name === name && !habit.archived)), kstDate());
+      await tx.userHabit.updateMany({ where: { userId, archived: false, name: { notIn: names } }, data: { archived: true } });
+      return user;
+    });
   }
 
   updateReminder(userId: string, input: { enabled: boolean; time: string }) {
     return this.prisma.user.update({ where: { id: userId }, data: { reminderEnabled: input.enabled, reminderTime: input.time } });
+  }
+
+  updateQuestPreferences(userId: string, input: { note: string; difficulty: string }) {
+    return this.prisma.user.update({ where: { id: userId }, data: { note: input.note.trim(), preferredDifficulty: input.difficulty } });
   }
 
   private achievedDates(userId: string, db: PrismaService | Prisma.TransactionClient = this.prisma) {

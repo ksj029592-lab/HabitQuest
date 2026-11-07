@@ -9,6 +9,7 @@ import { Button } from './Button';
 import { ActivityOverviewPanel } from './ActivityOverviewPanel';
 import { CalendarPanel } from './CalendarPanel';
 import { WeeklyReportPanel } from './WeeklyReportPanel';
+import { HabitPanel } from './HabitPanel';
 
 export const ProgressCenter: React.FC<{ session: UserSession; onRefresh: () => Promise<void> }> = ({ session, onRefresh }) => {
   const [view, setView] = useState<'stats' | 'tree' | 'history' | 'calendar' | 'weekly'>('stats');
@@ -84,7 +85,7 @@ export const ProgressCenter: React.FC<{ session: UserSession; onRefresh: () => P
       {view === 'weekly' && <WeeklyReportPanel serverBacked={serverBacked} />}
 
       {view === 'stats' && (serverBacked
-        ? <ActivityOverviewPanel totalCompleted={data.stats.totalQuestsCompleted} currentStreak={data.streak.currentStreak} />
+        ? <><ActivityOverviewPanel totalCompleted={data.stats.totalQuestsCompleted} currentStreak={data.streak.currentStreak} /><HabitPanel /></>
         : <p className="hq-session-notice">서버에 연결하면 실제 활동 기록을 볼 수 있어요.</p>)}
 
       {view === 'tree' && <>

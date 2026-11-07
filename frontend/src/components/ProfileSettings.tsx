@@ -4,10 +4,11 @@ import { isAxiosError } from 'axios';
 import { UserSession } from '@types';
 import { userApi } from '@api';
 import { Button } from './Button';
+import { HabitPanel } from './HabitPanel';
 
 export const ProfileSettings: React.FC<{ session: UserSession; onRefresh: () => Promise<void> }> = ({ session, onRefresh }) => {
   const preferences = session.personaData.userPreferences;
-  const [habits, setHabits] = useState<string[]>(preferences?.habits || []);
+  const habits = preferences?.habits || [];
   const [difficulty, setDifficulty] = useState<'easy' | 'normal' | 'hard'>(preferences?.difficulty || 'normal');
   const [note, setNote] = useState(preferences?.note || '');
   const [enabled, setEnabled] = useState(session.personaData.reminderEnabled || false);
@@ -17,7 +18,6 @@ export const ProfileSettings: React.FC<{ session: UserSession; onRefresh: () => 
   const [error, setError] = useState('');
   const busy = useRef(false);
   const serverBacked = !session.sessionId.startsWith('session_');
-  const options = [...new Set(['운동과 건강', '독서와 학습', '집중력과 생산성', '마음 챙김', '수면 습관', '정리와 생활', ...habits])];
 
   const save = async (event: React.FormEvent, kind: 'habits' | 'reminder') => {
     event.preventDefault();
@@ -29,7 +29,7 @@ export const ProfileSettings: React.FC<{ session: UserSession; onRefresh: () => 
     try {
       let permission = typeof Notification === 'undefined' ? 'unsupported' : Notification.permission;
       if (kind === 'reminder' && enabled && permission === 'default') permission = await Notification.requestPermission();
-      const result = kind === 'habits' ? await userApi.updatePreferences({ habits, note, difficulty }) : await userApi.updateReminder({ enabled, time });
+      const result = kind === 'habits' ? await userApi.updateQuestPreferences({ note, difficulty }) : await userApi.updateReminder({ enabled, time });
       if (!result.success) throw new Error(result.error?.message || '설정을 저장하지 못했어요.');
       await onRefresh();
       setMessage(kind === 'habits' ? '습관 설정을 저장했어요. 오늘의 퀘스트는 유지되고 이후 생성에 반영됩니다.' : !enabled ? '리마인더를 껐어요.' : permission === 'granted' ? `${time} KST 리마인더를 저장했어요.` : '리마인더를 저장했어요. 브라우저 알림 권한이 없어 앱 내 알림으로 표시됩니다.');
@@ -43,13 +43,13 @@ export const ProfileSettings: React.FC<{ session: UserSession; onRefresh: () => 
   };
 
   return <div className="hq-profile-settings">
+    <HabitPanel editable onRefresh={onRefresh} />
     <section aria-labelledby="habit-settings-title"><div className="hq-settings-heading"><h3 id="habit-settings-title">습관 설정</h3><span>다음 퀘스트 생성부터 반영</span></div>
       {!serverBacked && <p className="hq-session-notice">데모 세션 · 서버 설정 저장 불가</p>}
       <form onSubmit={(event) => void save(event, 'habits')}>
-        <fieldset><legend>관심 습관</legend><div className="hq-habit-checkboxes">{options.map((habit) => <label key={habit}><input type="checkbox" checked={habits.includes(habit)} disabled={saving !== null} onChange={() => setHabits((current) => current.includes(habit) ? current.filter((entry) => entry !== habit) : [...current, habit])} />{habit}</label>)}</div></fieldset>
         <fieldset><legend>기본 난이도</legend><div className="hq-difficulty-settings">{([['easy', '쉬움'], ['normal', '보통'], ['hard', '어려움']] as const).map(([value, label]) => <label key={value}><input type="radio" name="preferred-difficulty" value={value} checked={difficulty === value} disabled={saving !== null} onChange={() => setDifficulty(value)} />{label}</label>)}</div></fieldset>
         <label htmlFor="profile-habit-note">퀘스트 요청 메모</label><textarea id="profile-habit-note" value={note} onChange={(event) => setNote(event.target.value)} maxLength={500} rows={3} disabled={saving !== null} placeholder="예: 퇴근 후 10분 정도 운동하고 싶어요" />
-        <Button type="submit" disabled={!serverBacked || habits.length === 0 || habits.length > 8 || saving !== null}><Save size={16} />{saving === 'habits' ? '저장 중' : '습관 설정 저장'}</Button>
+        <Button type="submit" disabled={!serverBacked || habits.length > 8 || saving !== null}><Save size={16} />{saving === 'habits' ? '저장 중' : '퀘스트 기본 설정 저장'}</Button>
       </form>
     </section>
     <section aria-labelledby="reminder-settings-title"><div className="hq-settings-heading"><h3 id="reminder-settings-title"><Bell size={18} /> 리마인더</h3><span>앱이 열린 동안 · 한국시간</span></div>

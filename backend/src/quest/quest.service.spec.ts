@@ -1,3 +1,4 @@
+import { HabitService } from '@/habit/habit.service';
 import { QuestService } from './quest.service';
 import { PrismaService } from '@/prisma/prisma.service';
 import { RankingService } from '@/ranking/ranking.service';
@@ -21,7 +22,7 @@ describe('Quest completion reflection', () => {
     jest.resetAllMocks();
     prisma.dailyQuest.findUnique.mockResolvedValue({ ...quest });
     ai.reviewReflection.mockResolvedValue({ approved: true, feedback: '다시 도전할 용기를 발견했네요!' });
-    service = new QuestService(prisma as unknown as PrismaService, ranking as unknown as RankingService, ai as unknown as AiService);
+    service = new QuestService(prisma as unknown as PrismaService, ranking as unknown as RankingService, ai as unknown as AiService, {} as HabitService);
   });
 
   afterEach(() => jest.useRealTimers());
@@ -78,7 +79,7 @@ describe('Quest completion reflection', () => {
 
   it('returns the recorded capped rewards and saved reflection in history', async () => {
     const db = { dailyQuest: { findMany: jest.fn().mockResolvedValue([{ ...quest, status: 'completed', verificationAnswer: answer, completionLog: [{ goldReward: 0, rankingPointAwarded: 0 }] }]) } };
-    const records = await new QuestService(db as unknown as PrismaService, ranking as unknown as RankingService, ai as unknown as AiService).getQuestHistory('user-1');
+    const records = await new QuestService(db as unknown as PrismaService, ranking as unknown as RankingService, ai as unknown as AiService, {} as HabitService).getQuestHistory('user-1');
     expect(records[0]).toEqual(expect.objectContaining({ goldReward: 0, rankingPointAwarded: 0, verificationAnswer: answer }));
     expect(db.dailyQuest.findMany).toHaveBeenCalledWith(expect.objectContaining({ where: { userId: 'user-1', status: 'completed' } }));
   });
@@ -93,7 +94,7 @@ describe('Quest completion reflection', () => {
       dailyQuest: { count: jest.fn().mockResolvedValueOnce(12).mockResolvedValueOnce(2).mockResolvedValueOnce(6) },
     };
     ranking.ensureCurrentSeason.mockResolvedValue({ id: 'season-1' });
-    const state = await new QuestService(db as unknown as PrismaService, ranking as unknown as RankingService, ai as unknown as AiService).getUserState('user-1');
+    const state = await new QuestService(db as unknown as PrismaService, ranking as unknown as RankingService, ai as unknown as AiService, {} as HabitService).getUserState('user-1');
     expect(state.stats).toEqual({ totalQuestsCompleted: 12, thisMonthQuestsCompleted: 2, monthlySuccessRate: 33, averageStreakLength: 1.5 });
     expect(db.dailyQuest.count).toHaveBeenCalledWith({ where: { userId: 'user-1', questDateKst: { gte: '2026-10-01', lte: '2026-10-25' } } });
   });

@@ -32,6 +32,7 @@ describe('Habit settings, calendar and reminders', () => {
   });
 
   const tx = {
+    userHabit: { findMany: jest.fn().mockResolvedValue([]), create: jest.fn(), updateMany: jest.fn() },
     user: { update: jest.fn(), findUniqueOrThrow: jest.fn(), updateMany: jest.fn() },
     dayRewardClaim: { findUnique: jest.fn(), create: jest.fn() },
     dailyQuest: { groupBy: jest.fn(), count: jest.fn() },
@@ -47,6 +48,7 @@ describe('Habit settings, calendar and reminders', () => {
     prisma.dayRewardClaim.findMany.mockResolvedValue([]);
     prisma.dailyQuest.findMany.mockResolvedValue([]);
     prisma.$transaction.mockImplementation(async (callback) => callback(tx));
+    tx.userHabit.findMany.mockResolvedValue([]);
     tx.user.update.mockResolvedValue({ id: 'user', gold: 1000 });
     tx.dailyQuest.groupBy.mockResolvedValue([{ questDateKst: '2026-10-29' }, { questDateKst: '2026-10-30' }, { questDateKst: '2026-10-31' }]);
     service = new ActivityService(prisma as unknown as PrismaService);
@@ -55,7 +57,7 @@ describe('Habit settings, calendar and reminders', () => {
 
   it('saves preferences without replacing existing quests', async () => {
     await service.updatePreferences('user', { habits: ['독서와 학습'], note: '매일 5쪽', difficulty: 'easy' });
-    expect(prisma.user.update).toHaveBeenCalledWith({ where: { id: 'user' }, data: { habits: ['독서와 학습'], note: '매일 5쪽', preferredDifficulty: 'easy' } });
+    expect(tx.user.update).toHaveBeenCalledWith({ where: { id: 'user' }, data: { habits: ['독서와 학습'], note: '매일 5쪽', preferredDifficulty: 'easy' } });
     expect(prisma.dailyQuest.findMany).not.toHaveBeenCalled();
   });
 

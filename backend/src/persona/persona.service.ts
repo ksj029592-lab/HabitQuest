@@ -8,6 +8,9 @@ import { CreateSessionDto, SessionResponseDto } from './persona.dto';
 import { randomUUID } from 'node:crypto';
 import { questCategoryIds } from '@/common/habit-categories';
 import { COSMETICS } from '@/common/game-catalog';
+import { habitChoices } from '@/common/habit-categories';
+import { createInitialHabits } from '@/habit/habit.service';
+import { dailySchedule } from '@/habit/schedule';
 
 @Injectable()
 export class PersonaService {
@@ -33,7 +36,7 @@ export class PersonaService {
   async createSession(input: CreateSessionDto): Promise<SessionResponseDto> {
     // 페르소나 조회
     const personaId = input.personaId.trim();
-    const habits = [...new Set((input.habits ?? []).map((habit) => habit.trim()))];
+    const habits = habitChoices(input.habits ?? []);
     const note = input.note?.trim() ?? '';
     const difficulty = input.difficulty ?? 'normal';
     const persona = await this.prisma.testPersona.findFirst({
@@ -48,7 +51,8 @@ export class PersonaService {
 
     const generatedQuests = await this.aiService.generateQuests({
       personaName: persona.name,
-      habits,
+      habits: habits.slice(0, 3),
+      count: Math.min(3, habits.length),
       note,
       difficulty,
     });
@@ -98,13 +102,18 @@ export class PersonaService {
       }
 
       // 오늘 퀘스트 생성
+      const managed = await createInitialHabits(tx, userId, habits, today);
       const categoryIds = await questCategoryIds(tx, habits, generatedQuests);
 
       for (const [index, quest] of generatedQuests.entries()) {
+        const habit = managed.find((entry) => entry.name === quest.categoryId);
+        if (!habit) throw new BadRequestException('등록된 습관과 퀘스트가 일치하지 않습니다.');
         await tx.dailyQuest.create({
           data: {
             userId,
             categoryId: categoryIds[index],
+            habitId: habit.id,
+            habitSnapshot: { name: quest.categoryId, schedule: dailySchedule(today) },
             questDateKst: today,
             difficulty: quest.difficulty,
             title: quest.title,

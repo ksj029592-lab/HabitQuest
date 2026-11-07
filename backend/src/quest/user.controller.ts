@@ -21,7 +21,7 @@ class CosmeticActionDto {
 
 class HabitPreferencesDto {
   @IsArray()
-  @ArrayMinSize(1)
+  @ArrayMinSize(0)
   @ArrayMaxSize(8)
   @IsString({ each: true })
   @MaxLength(80, { each: true })
@@ -45,9 +45,20 @@ class ReminderSettingsDto {
   time: string;
 }
 
+class QuestPreferencesDto {
+  @IsString() @MaxLength(500) note: string;
+  @IsIn(['easy', 'normal', 'hard']) difficulty: string;
+}
+
 @Controller('users')
 export class UserController {
   constructor(private readonly questService: QuestService, private readonly progression: ProgressionService, private readonly shop: ShopService, private readonly activity: ActivityService) {}
+
+  @Post('me/quest-preferences')
+  async updateQuestPreferences(@Headers('x-user-id') userId: string, @Body() dto: QuestPreferencesDto) {
+    await this.activity.updateQuestPreferences(userId, dto);
+    return { success: true };
+  }
 
   @Get('me/avatar')
   @Header('Cache-Control', 'private, no-store')

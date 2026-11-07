@@ -9,6 +9,9 @@ import { RankingService } from '@/ranking/ranking.service';
 import { AiService } from '@/ai/ai.service';
 import { questCategoryIds } from '@/common/habit-categories';
 import { getRankingPointReward } from '@/common/ranking-points';
+import { HabitService } from '@/habit/habit.service';
+import { SingleFlight } from '@/common/single-flight';
+import { createHash } from 'node:crypto';
 
 interface RerollInput {
   personaName: string;
@@ -28,11 +31,13 @@ const questDetails = {
 @Injectable()
 export class QuestService {
   private readonly difficulties = ['easy', 'normal', 'hard'] as const;
+  private readonly flights = new SingleFlight();
 
   constructor(
     private prisma: PrismaService,
     private rankingService: RankingService,
     private aiService: AiService,
+    private habitService: HabitService,
   ) {}
 
   private toDto(
@@ -40,6 +45,7 @@ export class QuestService {
       id: string;
       userId: string;
       categoryId: string;
+      habitId?: string | null;
       category?: { name: string };
       completionLog?: Array<{ expReward: number; goldReward: number; rankingPointAwarded: number }>;
       questDateKst: string;
@@ -63,6 +69,7 @@ export class QuestService {
       id: quest.id,
       userId: quest.userId,
       categoryId: quest.categoryId,
+      habitId: quest.habitId ?? undefined,
       categoryName: quest.category?.name,
       questDateKst: quest.questDateKst,
       difficulty: quest.difficulty,
@@ -108,6 +115,10 @@ export class QuestService {
    * 오늘 퀘스트가 없으면(자정 이후 첫 접속) 새로 생성하고 스트릭 끊김/방지권을 처리
    */
   async ensureDailyQuests(userId: string, input: EnsureInput) {
+    return this.flights.run(`ensure:${userId}:${this.getKstDateString()}`, () => this.ensureDailyQuestsOnce(userId, input));
+  }
+
+  private async ensureDailyQuestsOnce(userId: string, input: EnsureInput) {
     const today = this.getKstDateString();
     const existing = await this.getDailyQuests(userId);
     if (existing.length > 0) {
@@ -118,14 +129,19 @@ export class QuestService {
     if (!user) throw new Error('사용자를 찾을 수 없습니다');
 
     input = { personaName: input.personaName, habits: user.habits, note: user.note, difficulty: user.preferredDifficulty as EnsureInput['difficulty'] };
-    const generated = await this.aiService.generateQuests({
+    const candidates = (await this.habitService.candidates(userId)).slice(0, 3);
+    const generated = candidates.length ? await this.aiService.generateQuests({
       personaName: input.personaName,
-      habits: input.habits,
+      habits: candidates.map((habit) => habit.name),
+      count: candidates.length,
+      habitContexts: candidates.map(({ name, description, note, schedule, recentTitles }) => ({ name, description, note, schedule, recentTitles })),
       note: input.note,
       difficulty: input.difficulty ?? 'normal',
-    });
+    }) : [];
     return this.prisma.$transaction(async (tx) => {
       await tx.user.update({ where: { id: userId }, data: { updatedAt: new Date() } });
+      const fresh = await tx.userHabit.findMany({ where: { id: { in: candidates.map((habit) => habit.id) }, userId } });
+      if (candidates.some((habit) => !fresh.some((item) => item.id === habit.id && !item.archived && item.updatedAt.getTime() === habit.updatedAt.getTime()))) throw new BadRequestException('습관 설정이 변경됐어요. 퀘스트를 다시 요청해 주세요.');
       if (today !== this.getKstDateString()) throw new BadRequestException('날짜가 바뀌었어요. 오늘의 퀘스트를 다시 요청해 주세요.');
       const already = await tx.dailyQuest.count({ where: { userId, questDateKst: today } });
       if (already > 0) {
@@ -156,12 +172,15 @@ export class QuestService {
         }
       }
 
-      const categoryIds = await questCategoryIds(tx, input.habits, generated);
+      const categoryIds = await questCategoryIds(tx, candidates.map((habit) => habit.name), generated);
       for (const [index, quest] of generated.entries()) {
+        const habit = candidates.find((item) => item.name === quest.categoryId)!;
         await tx.dailyQuest.create({
           data: {
             userId,
             categoryId: categoryIds[index],
+            habitId: habit.id,
+            habitSnapshot: { name: habit.name, schedule: habit.schedule },
             questDateKst: today,
             difficulty: quest.difficulty,
             title: quest.title,
@@ -179,7 +198,7 @@ export class QuestService {
         include: questDetails,
         orderBy: { slotNo: 'asc' },
       });
-      return { created: true, streakReset, protectionUsed, quests: quests.map((q) => this.toDto(q)) };
+      return { created: generated.length > 0, streakReset, protectionUsed, quests: quests.map((q) => this.toDto(q)) };
     });
   }
 
@@ -253,6 +272,10 @@ export class QuestService {
    * 리롤 티켓 1개를 소모하여 오늘의 진행 중 퀘스트를 랜덤 난이도로 재생성 (완료된 퀘스트는 유지)
    */
   async rerollQuests(userId: string, input: RerollInput) {
+    return this.flights.run(`reroll:${userId}:${this.getKstDateString()}`, () => this.rerollQuestsOnce(userId, input));
+  }
+
+  private async rerollQuestsOnce(userId: string, input: RerollInput) {
     const owner = await this.prisma.user.findUniqueOrThrow({ where: { id: userId } });
     input = { personaName: input.personaName, habits: owner.habits, note: owner.note };
     const today = this.getKstDateString();
@@ -272,15 +295,21 @@ export class QuestService {
     }
 
     const difficulty = this.difficulties[Math.floor(Math.random() * this.difficulties.length)];
+    const candidates = (await this.habitService.candidates(userId)).slice(0, pending.length);
+    if (!candidates.length) throw new BadRequestException('오늘 실천 가능한 습관이 없어요. 기존 퀘스트와 리롤권은 유지됩니다.');
     const generated = await this.aiService.generateQuests({
       personaName: input.personaName,
-      habits: input.habits,
+      habits: candidates.map((habit) => habit.name),
+      count: candidates.length,
+      habitContexts: candidates.map(({ name, description, note, schedule, recentTitles }) => ({ name, description, note, schedule, recentTitles })),
       note: input.note,
       difficulty,
     });
 
     return this.prisma.$transaction(async (tx) => {
       await tx.user.update({ where: { id: userId }, data: { updatedAt: new Date() } });
+      const fresh = await tx.userHabit.findMany({ where: { id: { in: candidates.map((habit) => habit.id) }, userId } });
+      if (candidates.some((habit) => !fresh.some((item) => item.id === habit.id && !item.archived && item.updatedAt.getTime() === habit.updatedAt.getTime()))) throw new BadRequestException('습관 설정이 변경됐어요. 다시 시도해 주세요.');
       if (today !== this.getKstDateString()) throw new BadRequestException('날짜가 바뀌었어요. 오늘의 퀘스트를 확인해 주세요.');
       const used = await tx.inventory.updateMany({
         where: { id: ticket.id, quantity: { gte: 1 } },
@@ -297,13 +326,16 @@ export class QuestService {
         throw new Error('퀘스트 상태가 변경되어 리롤할 수 없습니다');
       }
 
-      const categoryIds = await questCategoryIds(tx, input.habits, generated.slice(0, pending.length));
-      for (const [index, old] of pending.entries()) {
-        const next = generated[index % generated.length];
+      const categoryIds = await questCategoryIds(tx, candidates.map((habit) => habit.name), generated);
+      for (const [index, next] of generated.entries()) {
+        const old = pending[index];
+        const habit = candidates.find((item) => item.name === next.categoryId)!;
         await tx.dailyQuest.create({
           data: {
             userId,
             categoryId: categoryIds[index],
+            habitId: habit.id,
+            habitSnapshot: { name: habit.name, schedule: habit.schedule },
             questDateKst: today,
             difficulty: next.difficulty,
             title: next.title,
@@ -335,6 +367,10 @@ export class QuestService {
    * 퀘스트 완료 처리
    */
   async getVerificationQuestion(questId: string, userId?: string) {
+    return this.flights.run(`question:${userId}:${questId}`, () => this.getVerificationQuestionOnce(questId, userId));
+  }
+
+  private async getVerificationQuestionOnce(questId: string, userId?: string) {
     const quest = await this.getVerifiableQuest(questId, userId);
     if (quest.verificationQuestion) return { question: quest.verificationQuestion };
     const generated = await this.aiService.createReflectionQuestion({ title: quest.title, description: quest.description });
@@ -357,6 +393,11 @@ export class QuestService {
   }
 
   async completeQuest(questId: string, userId?: string, answer?: string): Promise<QuestResponseDto> {
+    const hash = createHash('sha256').update(answer ?? '').digest('hex');
+    return this.flights.run(`complete:${userId}:${questId}:${hash}`, () => this.completeQuestOnce(questId, userId, answer));
+  }
+
+  private async completeQuestOnce(questId: string, userId?: string, answer?: string): Promise<QuestResponseDto> {
     const trimmedAnswer = answer?.trim();
     if (!userId) throw new BadRequestException('사용자 세션이 필요합니다');
     if (!trimmedAnswer || trimmedAnswer.length > 2000) throw new BadRequestException('활동에 대한 답변을 2,000자 이내로 남겨 주세요.');

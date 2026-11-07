@@ -20,11 +20,13 @@ export const PersonaSelectionPage: React.FC = () => {
   const [difficulty, setDifficulty] = useState<'easy' | 'normal' | 'hard'>('normal');
   const [isGenerating, setIsGenerating] = useState(false);
   const [sessionError, setSessionError] = useState('');
+  const [customHabit, setCustomHabit] = useState('');
+  const [extraHabits, setExtraHabits] = useState<string[]>([]);
 
-  const habitOptions = ['운동과 건강', '독서와 학습', '집중력과 생산성', '마음 챙김', '수면 습관', '정리와 생활'];
+  const habitOptions = ['운동과 건강', '독서와 학습', '집중력과 생산성', '마음 챙김', '수면 습관', '정리와 생활', ...extraHabits];
 
   const toggleHabit = (habit: string) => {
-    setHabits((current) => current.includes(habit) ? current.filter((item) => item !== habit) : [...current, habit]);
+    setHabits((current) => current.includes(habit) ? current.filter((item) => item !== habit) : current.length < 8 ? [...current, habit] : current);
   };
 
   const handlePersonaSelected = useCallback((persona: TestPersona) => {
@@ -79,11 +81,15 @@ export const PersonaSelectionPage: React.FC = () => {
           <h2 className="font-semibold">관심 있는 습관을 모두 골라주세요</h2>
           <div className="grid grid-cols-2 gap-3">
             {habitOptions.map((habit) => (
-              <button key={habit} onClick={() => toggleHabit(habit)} className="hq-choice-chip text-left" aria-pressed={habits.includes(habit)}>
+              <button key={habit} disabled={isGenerating || !habits.includes(habit) && habits.length >= 8} onClick={() => toggleHabit(habit)} className="hq-choice-chip text-left" aria-pressed={habits.includes(habit)}>
                 {habits.includes(habit) ? '✓ ' : ''}{habit}
               </button>
             ))}
           </div>
+          <form className="hq-custom-habit" onSubmit={(event) => { event.preventDefault(); const name = customHabit.trim(); if (!name || habits.length >= 8 || habitOptions.some((habit) => habit.toLowerCase() === name.toLowerCase())) return; setExtraHabits((current) => [...current, name]); setHabits((current) => [...current, name]); setCustomHabit(''); }}>
+            <label htmlFor="custom-habit-name">직접 습관 추가</label><div><input id="custom-habit-name" maxLength={80} value={customHabit} disabled={isGenerating} onChange={(event) => setCustomHabit(event.target.value)} placeholder="예: 영어 공부" /><button type="submit" className="hq-choice-chip" disabled={isGenerating || !customHabit.trim() || habits.length >= 8 || habitOptions.some((habit) => habit.toLowerCase() === customHabit.trim().toLowerCase())}>추가</button></div>
+          </form>
+          <p className="hq-activity-caption">최대 8개 · 처음에는 매일 실천으로 시작해요. 시작 후 내 프로필에서 요일과 주간 목표를 바꿀 수 있어요.</p>
         </section>
 
         <section className="space-y-3">
