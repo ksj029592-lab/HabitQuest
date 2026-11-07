@@ -5,6 +5,11 @@ import { RankingService } from './ranking.service';
 export class RankingController {
   constructor(private readonly rankingService: RankingService) {}
 
+  @Get('results')
+  async results(@Headers('x-user-id') userId: string) {
+    return { success: true, data: await this.rankingService.getSeasonResults(userId) };
+  }
+
   @Get('rewards')
   async rewards(@Headers('x-user-id') userId: string) {
     return { success: true, data: await this.rankingService.getSeasonRewards(userId) };

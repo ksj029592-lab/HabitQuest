@@ -25,7 +25,9 @@ export type SeasonRankingResponse = ApiResponse<SeasonRankingEntry[]> & { season
 
 export interface SeasonReward { id: string; month: string; band: string; label: string }
 
+export interface SeasonResult { yearMonth: string; startAt: string; endAt: string; state: 'active'|'pending'|'rewarded'|'not_rewarded'|'no_participation'; rank: number|null; points: number; rewards: {id:string;label:string;grantedAt:string}[] }
 export const rankingApi = {
+  getResults: () => apiClient.get<SeasonResult[]>('/ranking/results'),
   getRewards: () => apiClient.get<SeasonReward[]>('/ranking/rewards'),
   getCurrentSeasonRanking: async (): Promise<SeasonRankingResponse> => {
     return apiClient.get<SeasonRankingEntry[]>('/ranking/current');

@@ -6,6 +6,7 @@ import { AvatarFrame, Button, Header } from '@components';
 import { useSessionStore } from '@store';
 import { rankingApi, SeasonPeriod, SeasonRankingEntry, SeasonReward } from '../api/ranking';
 
+import { SeasonResults } from '../components/SeasonResults';
 import { FieldIcon, TrailSketch } from '../components/FieldArt';
 
 const examples: SeasonRankingEntry[] = [
@@ -88,6 +89,7 @@ export function RankingPage() {
             <strong className="hq-ranking-score">{entry.points.toLocaleString()} <small>PT</small></strong>
           </li>)}
         </ol>}
+        {!demo && <SeasonResults />}
         {!demo && <section className="hq-journey-card" aria-label="시즌 보상">
           <h3>시즌 보상 기록</h3>
           {rewards === null && <Button size="small" onClick={() => void loadRewards()} disabled={rewardsLoading}>{rewardsLoading ? '불러오는 중' : '내 시즌 보상 보기'}</Button>}

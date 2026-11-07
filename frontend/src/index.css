@@ -792,3 +792,11 @@ input[type='radio'] {
 .hq-custom-habit input { flex: 1; min-width: 0; min-height: 44px; padding: 9px 12px; border: 1px solid var(--hq-line); border-radius: 7px; background: var(--hq-paper); color: var(--hq-ink); }
 @media (max-width: 650px) { .hq-habit-list { grid-template-columns: minmax(0, 1fr); } .hq-habit-card, .hq-habit-editor { padding: 14px; } .hq-weekday-picker { grid-template-columns: repeat(4, minmax(0, 1fr)); } }
 @media (prefers-reduced-motion: reduce) { .hq-daily-summary { animation: none; } }
+.hq-season-result h3 { display:flex;align-items:center;gap:8px;margin-bottom:16px; }
+.hq-season-result label { display:grid;gap:8px;font-size:13px; }
+.hq-season-result select { min-height:44px;max-width:100%;background:var(--hq-paper);border:1px solid var(--hq-line);border-radius:7px;padding:8px;color:var(--hq-ink); }
+.hq-season-result-content { animation:hq-enter .25s ease-out;display:grid;gap:14px;margin-top:18px;font-size:13px;line-height:1.8;overflow-wrap:anywhere; }
+.hq-season-result-content h4 { font-size:20px;font-weight:800; }
+.hq-season-score { display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px;background:var(--hq-accent-soft);padding:16px;border-radius:8px;color:var(--hq-accent); }
+.hq-season-score strong { font-size:22px; } .hq-season-score small { display:block;font-size:11px;font-weight:500; }
+@media(prefers-reduced-motion:reduce){.hq-season-result-content{animation:none;}}
