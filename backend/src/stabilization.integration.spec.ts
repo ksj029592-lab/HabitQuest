@@ -255,6 +255,7 @@ integration('HabitQuest HTTP and isolated PostgreSQL', () => {
     await prisma.dailyQuest.createMany({ data: [0,1].map((slotNo) => ({ userId, habitId: habit.id, habitSnapshot: { name: '이전 이름' }, categoryId: category.id, questDateKst: monday, title: '이전 실천', description: '', status: 'completed', difficulty: 'easy', expReward: 100, goldReward: 50, slotNo })) });
     const habits = app.get(HabitService);
     const report = await habits.overview(userId);
+    expect(report.counts).toMatchObject({ total: 1, registered: 1, active: 1, eligible: 0, maxQuests: 3 });
     expect(report.habits[0].stats).toMatchObject({ total: 2, weeklyCompleted: 1, weeklyTarget: 1, weeklyRate: 100 });
     expect(await habits.candidates(userId)).toEqual([]);
     expect((await prisma.dailyQuest.findFirstOrThrow({ where: { userId } })).habitSnapshot).toEqual({ name: '이전 이름' });

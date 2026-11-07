@@ -13,6 +13,7 @@ export function HabitPanel({ editable = false, onRefresh }: { editable?: boolean
   const [data, setData] = useState<HabitOverview>();
   const [status, setStatus] = useState<'loading' | 'ready' | 'error'>('loading');
   const [attempt, setAttempt] = useState(0);
+  const [showArchived, setShowArchived] = useState(false);
   const [filter, setFilter] = useState('');
   const [form, setForm] = useState<HabitInput | null>(null);
   const [editing, setEditing] = useState<string>();
@@ -43,7 +44,7 @@ export function HabitPanel({ editable = false, onRefresh }: { editable?: boolean
       if (action === 'save' && form) {
         const result = await habitApi.save(form, editing);
         if (!result.success || !result.data) throw new Error('저장하지 못했어요.');
-        setMessage(`저장했어요. 일정 적용일: ${result.data.effectiveFrom}. 오늘 생성된 퀘스트는 그대로 유지됩니다.`);
+        setMessage(`저장했어요. 서버에서 확인한 일정 적용일 (KST): ${result.data.effectiveFrom}. 오늘 생성된 퀘스트는 그대로 유지됩니다.`);
         setForm(null);
       } else if (archiving) {
         const result = await habitApi.archive(archiving);
@@ -58,14 +59,16 @@ export function HabitPanel({ editable = false, onRefresh }: { editable?: boolean
     } finally { busy.current = false; setSaving(false); }
   };
   const changeMode = (mode: HabitInput['mode']) => setForm((value) => value && ({ ...value, mode, weekdays: mode === 'weekdays' ? [0, 2, 4] : [], weeklyTarget: mode === 'daily' ? 7 : 3 }));
-  const visible = data?.habits.filter((habit) => !editable || !habit.archived) ?? [];
+  const visible = data?.habits.filter((habit) => !editable || showArchived || !habit.archived) ?? [];
   const days = data?.days.map((day) => {
     const quests = day.quests.filter((quest) => !filter || quest.habitId === filter);
     return { ...day, quests, total: quests.length, completed: quests.filter((quest) => quest.status === 'completed').length };
   });
   return <section className="hq-habit-panel" aria-labelledby={editable ? 'habit-manager-title' : 'habit-insights-title'}>
-    <div className="hq-settings-heading"><h3 id={editable ? 'habit-manager-title' : 'habit-insights-title'}><Sprout size={20} aria-hidden="true" />{editable ? '나의 습관 관리' : '습관별 실천 기록'}</h3>{editable && <Button size="small" onClick={() => edit()} disabled={saving || visible.length >= 8}><Plus size={16} />습관 추가</Button>}</div>
+    <div className="hq-settings-heading"><h3 id={editable ? 'habit-manager-title' : 'habit-insights-title'}><Sprout size={20} aria-hidden="true" />{editable ? '나의 습관 관리' : '습관별 실천 기록'}</h3>{editable && <Button size="small" onClick={() => edit()} disabled={saving || status !== 'ready' || (data?.counts?.registered ?? data?.habits.filter(h => !h.archived).length ?? 0) >= 8}><Plus size={16} />습관 추가</Button>}</div>
     <p className="hq-activity-caption">{editable ? '최대 8개 · 요일과 목표는 한국시간 기준입니다. 일정 변경은 다음 날, 주간 목표 변경은 다음 주 월요일부터 적용됩니다.' : '실제 퀘스트 완료 기록입니다. 주간 목표는 완료한 날짜를 한 번씩 세며, 아직 끝나지 않은 주는 실패로 계산하지 않아요.'}</p>
+    {editable && data?.counts && <div className="hq-activity-caption" role="status"><p>전체 {data.counts.total}개 (보관 포함) · 활성 {data.counts.active}개 · 오늘 실천 가능 {data.counts.eligible}개 · 하루 최대 {data.counts.maxQuests}개</p><p>{data.counts.eligible > 3 ? `오늘 실천 가능한 습관이 ${data.counts.eligible}개 있습니다. 하루 최대 3개의 퀘스트가 생성되며, 나머지 습관은 순환 배정됩니다.` : '실천 가능한 습관 수만큼 생성됩니다. 3개보다 적어도 정상입니다.'} 오늘 이미 생성한 퀘스트는 바뀌지 않으며, 오늘 완료했거나 주간 목표를 채운 습관은 후보에서 제외됩니다.</p></div>}
+    {editable && <label className="hq-habit-switch"><input type="checkbox" checked={showArchived} onChange={event => setShowArchived(event.target.checked)} /> 보관된 습관 표시</label>}
     {message && <p role="status" className="hq-progress-message">{message}</p>}
     {error && <p role="alert" className="hq-verification-error">{error}</p>}
     {form && <form className="hq-habit-editor" onSubmit={(event) => { event.preventDefault(); void mutate('save'); }} aria-label={editing ? '습관 수정' : '새 습관'}>
@@ -91,7 +94,7 @@ export function HabitPanel({ editable = false, onRefresh }: { editable?: boolean
         <progress max={100} value={habit.stats.weeklyRate ?? 0} aria-label={`${habit.name} 주간 목표 달성률`} />
         <dl className="hq-habit-stats"><div><dt>최근 7일</dt><dd>{habit.stats.last7}회</dd></div><div><dt>최근 30일</dt><dd>{habit.stats.last30}회</dd></div><div><dt>누적</dt><dd>{habit.stats.total}회</dd></div><div><dt>연속 / 최고</dt><dd>{habit.stats.streak.current} / {habit.stats.streak.best}{habit.stats.streak.unit}</dd></div></dl>
         <p className="hq-activity-caption">최근 실천: {habit.stats.lastDate ?? '아직 기록 없음'}</p>
-        {editable && <div className="hq-habit-actions"><Button variant="secondary" size="small" onClick={() => edit(habit)} disabled={saving}><Pencil size={14} />수정</Button><button type="button" className="hq-text-button" onClick={() => setArchiving(habit.id)} disabled={saving}><Archive size={14} />보관</button>{archiving === habit.id && <div className="hq-habit-archive"><p>앞으로의 생성에서 제외합니다. 기존 완료 기록은 남아요.</p><Button size="small" onClick={() => void mutate('archive')} disabled={saving}>보관 확정</Button><button type="button" className="hq-text-button" onClick={() => setArchiving(undefined)} disabled={saving}>취소</button></div>}</div>}
+        {editable && !habit.archived && <div className="hq-habit-actions"><Button variant="secondary" size="small" onClick={() => edit(habit)} disabled={saving}><Pencil size={14} />수정</Button><button type="button" className="hq-text-button" onClick={() => setArchiving(habit.id)} disabled={saving}><Archive size={14} />보관</button>{archiving === habit.id && <div className="hq-habit-archive"><p>앞으로의 생성에서 제외합니다. 기존 완료 기록은 남아요.</p><Button size="small" onClick={() => void mutate('archive')} disabled={saving}>보관 확정</Button><button type="button" className="hq-text-button" onClick={() => setArchiving(undefined)} disabled={saving}>취소</button></div>}</div>}
       </article>)}</div>
       {!editable && data && days && <><label className="hq-habit-filter">히트맵 습관 필터<select value={filter} onChange={(event) => setFilter(event.target.value)}><option value="">전체 습관 (보관 기록 포함)</option>{data.habits.map((habit) => <option key={habit.id} value={habit.id}>{habit.name}{habit.archived ? ' · 보관됨' : ''}</option>)}</select></label><DayHeatmap today={data.today} days={days} />{data.mostConsistent && <p className="hq-activity-highlight">최근 30일 가장 꾸준한 습관: {data.habits.find((habit) => habit.id === data.mostConsistent)?.name}</p>}</>}
     </>}

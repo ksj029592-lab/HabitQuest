@@ -7,7 +7,7 @@ export type ManagedHabit = {
   stats: { last7: number; last30: number; total: number; lastDate: string | null; weeklyCompleted: number; weeklyTarget: number; weeklyRate: number | null; streak: { current: number; best: number; unit: string } };
 };
 export type HabitOverview = {
-  today: string; habits: ManagedHabit[]; mostConsistent: string | null;
+  today: string; counts?: { total: number; registered: number; active: number; eligible: number; maxQuests: number }; habits: ManagedHabit[]; mostConsistent: string | null;
   days: { date: string; total: number; completed: number; quests: { id: string; habitId: string; title: string; status: string }[] }[];
 };
 export const habitApi = {

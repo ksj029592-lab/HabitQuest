@@ -106,6 +106,8 @@ export class HabitService {
       const date = shiftDate(start, index), entries = filtered.filter((quest) => quest.questDateKst === date);
       return { date, total: entries.length, completed: entries.filter((quest) => quest.status === 'completed').length, quests: entries.map(({ id, habitId, title, status }) => ({ id, habitId, title, status })) };
     });
-    return { today, habits: items, days, mostConsistent: [...items].filter((habit) => habit.stats.practiceDays30 > 0).sort((a, b) => b.stats.practiceDays30 - a.stats.practiceDays30 || a.name.localeCompare(b.name, 'ko'))[0]?.id ?? null };
+    const eligible = await this.candidates(userId, now);
+    const counts = { total: habits.length, registered: habits.filter(h => !h.archived).length, active: habits.filter(h => !h.archived && scheduleAt(historyOf(h.scheduleHistory), today)?.active).length, eligible: eligible.length, maxQuests: 3 };
+    return { today, counts, habits: items, days, mostConsistent: [...items].filter((habit) => habit.stats.practiceDays30 > 0).sort((a, b) => b.stats.practiceDays30 - a.stats.practiceDays30 || a.name.localeCompare(b.name, 'ko'))[0]?.id ?? null };
   }
 }
