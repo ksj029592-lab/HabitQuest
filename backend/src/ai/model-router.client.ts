@@ -1,16 +1,22 @@
 import { Injectable, Logger, ServiceUnavailableException } from '@nestjs/common';
+import { RequestBudget } from '@/common/request-budget';
 import { DefaultAzureCredential } from '@azure/identity';
 
 @Injectable()
 export class ModelRouterClient {
   private readonly logger = new Logger(ModelRouterClient.name);
+  private readonly budget = new RequestBudget(60, 4);
   private credential?: DefaultAzureCredential;
 
   isConfigured(): boolean {
     return Boolean(process.env.FOUNDRY_MODEL_ROUTER_ENDPOINT && process.env.FOUNDRY_MODEL_ROUTER_DEPLOYMENT);
   }
 
-  async completeJson(instruction: string, input: object): Promise<Record<string, unknown>> {
+  completeJson(instruction: string, input: object): Promise<Record<string, unknown>> {
+    return this.budget.run(() => this.requestJson(instruction, input));
+  }
+
+  private async requestJson(instruction: string, input: object): Promise<Record<string, unknown>> {
     const endpoint = process.env.FOUNDRY_MODEL_ROUTER_ENDPOINT;
     const deployment = process.env.FOUNDRY_MODEL_ROUTER_DEPLOYMENT;
     if (!endpoint || !deployment) throw new ServiceUnavailableException('Foundry Model Router 연결 설정이 필요해요.');

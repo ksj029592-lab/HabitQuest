@@ -2,6 +2,35 @@ import { ActivityService } from './activity.service';
 import { PrismaService } from '@/prisma/prisma.service';
 
 describe('Habit settings, calendar and reminders', () => {
+  it('uses inclusive KST rolling windows and separates empty dates from missed quests', async () => {
+    const findMany = jest.fn().mockResolvedValue([
+      { questDateKst: '2026-10-03', status: 'completed', category: { name: '운동' } },
+      { questDateKst: '2026-10-25', status: 'pending', category: { name: '운동' } },
+      { questDateKst: '2026-10-26', status: 'completed', category: { name: '독서' } },
+      { questDateKst: '2026-11-01', status: 'completed', category: { name: '독서' } },
+      { questDateKst: '2026-11-01', status: 'pending', category: { name: '독서' } },
+    ]);
+    const prisma = { dailyQuest: { findMany } } as unknown as PrismaService;
+    const result = await new ActivityService(prisma).getActivityOverview('user', new Date('2026-10-31T15:00:00Z'));
+
+    expect(findMany).toHaveBeenCalledTimes(1);
+    expect(findMany).toHaveBeenCalledWith(expect.objectContaining({
+      where: { userId: 'user', questDateKst: { gte: '2026-10-03', lte: '2026-11-01' } },
+    }));
+    expect(result.days).toHaveLength(30);
+    expect(result.days[1]).toEqual({ date: '2026-10-04', total: 0, completed: 0 });
+    expect(result.last7).toEqual({ total: 3, completed: 2, rate: 67 });
+    expect(result.last30).toEqual({ total: 5, completed: 3, rate: 60 });
+    expect(result.topCategory).toEqual({ name: '독서', completed: 2 });
+  });
+
+  it('does not give an empty activity period a zero percent completion rate', async () => {
+    const prisma = { dailyQuest: { findMany: jest.fn().mockResolvedValue([]) } } as unknown as PrismaService;
+    const result = await new ActivityService(prisma).getActivityOverview('user', new Date('2026-11-01T00:00:00Z'));
+    expect(result.last7).toEqual({ total: 0, completed: 0, rate: null });
+    expect(result.topCategory).toBeNull();
+  });
+
   const tx = {
     user: { update: jest.fn(), findUniqueOrThrow: jest.fn(), updateMany: jest.fn() },
     dayRewardClaim: { findUnique: jest.fn(), create: jest.fn() },

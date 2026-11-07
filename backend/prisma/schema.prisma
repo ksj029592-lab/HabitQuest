@@ -50,6 +50,7 @@ model User {
   equippedTitle   String?
   equippedBorder  String?
   equippedDecoration String?
+  equippedBackground String?
   specialAvatarId String?
   avatarIndex     Int      @default(0)
   reminderEnabled Boolean  @default(false)
@@ -67,9 +68,18 @@ model User {
   rewards         SeasonRewardLog[]
   levelRewards    LevelRewardClaim[]
   dayRewards      DayRewardClaim[]
+  photo           ProfilePhoto?
   
   @@unique([personaId, id])
   @@map("users")
+}
+
+model ProfilePhoto {
+  userId String @id
+  jpeg   String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("profile_photos")
 }
 
 // 습관 카테고리

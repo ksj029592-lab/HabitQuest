@@ -7,7 +7,8 @@ RUN npm ci
 COPY . .
 ARG VITE_API_BASE_URL=/api
 ENV VITE_API_BASE_URL=$VITE_API_BASE_URL
-RUN npm run build
+ARG APP_REVISION=local
+RUN npm run build && node -e 'require("node:fs").writeFileSync("dist/version.json", JSON.stringify({ revision: process.argv[1] }))' "$APP_REVISION"
 
 FROM nginx:1.27-alpine
 COPY nginx.conf /etc/nginx/templates/default.conf.template

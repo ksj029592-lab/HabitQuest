@@ -4,6 +4,7 @@
 import { NestFactory } from '@nestjs/core';
 import { ValidationPipe } from '@nestjs/common';
 import { SwaggerModule, DocumentBuilder } from '@nestjs/swagger';
+import { AppService } from './app.service';
 import { AppModule } from './app.module';
 
 async function bootstrap() {
@@ -46,6 +47,16 @@ async function bootstrap() {
     SwaggerModule.setup('api-docs', app, document);
   }
 
+  // A production revision must resolve the database schema before opening its ingress port.
+  if (process.env.NODE_ENV === 'production') {
+    try {
+      await app.get(AppService).assertDatabaseReady();
+    } catch (error) {
+      await app.close();
+      throw error;
+    }
+  }
+
   // 서버 시작
   const port = process.env.PORT || 3001;
   await app.listen(port, () => {
@@ -54,4 +65,7 @@ async function bootstrap() {
   });
 }
 
-bootstrap();
+void bootstrap().catch(() => {
+  console.error('HabitQuest could not start. Check application configuration and database readiness.');
+  process.exitCode = 1;
+});

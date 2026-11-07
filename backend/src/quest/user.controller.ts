@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Headers, Param, ParseIntPipe, Post, Query } from '@nestjs/common';
+import { Body, Controller, Get, Header, Headers, Param, ParseIntPipe, Post, Query } from '@nestjs/common';
 import { ArrayMaxSize, ArrayMinSize, IsArray, IsBoolean, IsIn, IsString, Matches, MaxLength } from 'class-validator';
 import { QuestService } from './quest.service';
 import { ProgressionService } from './progression.service';
@@ -6,6 +6,12 @@ import { ShopService } from '@/shop/shop.service';
 import { Public } from '@/common/session.guard';
 import { COSMETICS, LEVEL_MILESTONES } from '@/common/game-catalog';
 import { ActivityService } from './activity.service';
+
+class ProfilePhotoDto {
+  @IsString()
+  @MaxLength(80_000)
+  jpeg: string;
+}
 
 class CosmeticActionDto {
   @IsString()
@@ -43,6 +49,24 @@ class ReminderSettingsDto {
 export class UserController {
   constructor(private readonly questService: QuestService, private readonly progression: ProgressionService, private readonly shop: ShopService, private readonly activity: ActivityService) {}
 
+  @Get('me/avatar')
+  @Header('Cache-Control', 'private, no-store')
+  async getPhoto(@Headers('x-user-id') userId: string) {
+    return { success: true, data: await this.activity.getPhoto(userId) };
+  }
+
+  @Post('me/avatar')
+  @Header('Cache-Control', 'private, no-store')
+  async savePhoto(@Headers('x-user-id') userId: string, @Body() dto: ProfilePhotoDto) {
+    return { success: true, data: await this.activity.savePhoto(userId, dto.jpeg) };
+  }
+
+  @Post('me/avatar/remove')
+  @Header('Cache-Control', 'private, no-store')
+  async removePhoto(@Headers('x-user-id') userId: string) {
+    return { success: true, data: await this.activity.savePhoto(userId, null) };
+  }
+
   @Post('me/preferences')
   async updatePreferences(@Headers('x-user-id') userId: string, @Body() dto: HabitPreferencesDto) {
     const saved = await this.activity.updatePreferences(userId, dto);
@@ -58,6 +82,11 @@ export class UserController {
   @Post('me/reminders/check')
   async checkReminder(@Headers('x-user-id') userId: string) {
     return { success: true, data: await this.activity.checkReminder(userId) };
+  }
+
+  @Get('me/activity')
+  async getActivityOverview(@Headers('x-user-id') userId: string) {
+    return { success: true, data: await this.activity.getActivityOverview(userId) };
   }
 
   @Get('me/calendar')

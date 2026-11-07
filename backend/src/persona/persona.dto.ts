@@ -1,19 +1,25 @@
 /**
  * 페르소나 DTO
  */
-import { IsString, IsNumber, IsArray, IsOptional, IsIn } from 'class-validator';
+import { ArrayMaxSize, IsArray, IsIn, IsOptional, IsString, Matches, MaxLength } from 'class-validator';
 
 export class CreateSessionDto {
   @IsString()
+  @MaxLength(80)
+  @Matches(/\S/)
   personaId: string;
 
   @IsOptional()
   @IsArray()
+  @ArrayMaxSize(8)
   @IsString({ each: true })
+  @MaxLength(80, { each: true })
+  @Matches(/\S/, { each: true })
   habits?: string[];
 
   @IsOptional()
   @IsString()
+  @MaxLength(500)
   note?: string;
 
   @IsOptional()

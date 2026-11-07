@@ -3,7 +3,7 @@
  */
 import { BadRequestException, Injectable } from '@nestjs/common';
 import { PrismaService } from '@/prisma/prisma.service';
-import { COSMETICS } from '@/common/game-catalog';
+import { getCosmetic } from '@/common/game-catalog';
 
 @Injectable()
 export class ShopService {
@@ -124,8 +124,7 @@ export class ShopService {
   }
 
   async purchaseCosmetic(userId: string, itemId: string) {
-    if (!Object.prototype.hasOwnProperty.call(COSMETICS, itemId)) throw new BadRequestException('존재하지 않는 아이템입니다.');
-    const item = COSMETICS[itemId];
+    const item = getCosmetic(itemId);
     if (!item || item.price === null) throw new BadRequestException('상점에서 구매할 수 없는 아이템입니다.');
     return this.prisma.$transaction(async (tx) => {
       const user = await tx.user.update({ where: { id: userId }, data: { updatedAt: new Date() } });
@@ -141,14 +140,13 @@ export class ShopService {
   }
 
   async equipCosmetic(userId: string, itemId: string) {
-    if (!Object.prototype.hasOwnProperty.call(COSMETICS, itemId)) throw new BadRequestException('존재하지 않는 아이템입니다.');
-    const item = COSMETICS[itemId];
+    const item = getCosmetic(itemId);
     if (!item) throw new BadRequestException('존재하지 않는 아이템입니다.');
     return this.prisma.$transaction(async (tx) => {
       const user = await tx.user.update({ where: { id: userId }, data: { updatedAt: new Date() } });
       const owned = await tx.inventory.findUnique({ where: { userId_itemType_itemId: { userId, itemType: 'cosmetic', itemId } } });
       if (!owned?.quantity) throw new BadRequestException('보유한 아이템만 장착할 수 있어요.');
-      const fields = { border: 'equippedBorder', avatar: 'specialAvatarId', decoration: 'equippedDecoration', title: 'equippedTitle' } as const;
+      const fields = { border: 'equippedBorder', avatar: 'specialAvatarId', decoration: 'equippedDecoration', title: 'equippedTitle', background: 'equippedBackground' } as const;
       const field = fields[item.slot];
       await tx.user.update({ where: { id: userId }, data: { [field]: user[field] === item.value ? null : item.value } });
       return { itemId, equipped: user[field] !== item.value };

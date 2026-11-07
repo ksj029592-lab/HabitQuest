@@ -54,10 +54,11 @@ describe('Quest completion reflection', () => {
   });
 
   it('does not pay twice if another request already claimed the quest', async () => {
-    const tx = { dailyQuest: { findUnique: jest.fn().mockResolvedValue(quest), updateMany: jest.fn().mockResolvedValue({ count: 0 }) } };
+    ranking.ensureCurrentSeason.mockResolvedValue({ id: 'season-1' });
+    const tx = { $queryRaw: jest.fn().mockResolvedValue([{ status: 'active' }]), user: { update: jest.fn() }, dailyQuest: { findUnique: jest.fn().mockResolvedValue(quest), updateMany: jest.fn().mockResolvedValue({ count: 0 }) } };
     prisma.$transaction.mockImplementation(async (callback: (client: unknown) => Promise<unknown>) => callback(tx));
     await expect(service.completeQuest(quest.id, quest.userId, answer)).rejects.toThrow('이미 완료');
-    expect(ranking.ensureCurrentSeason).not.toHaveBeenCalled();
+    expect(ranking.calculatePoint).not.toHaveBeenCalled();
   });
 
   it.each([{ userId: 'other-user' }, { questDateKst: '2026-10-24' }, { status: 'completed' }, { verificationQuestion: null }])('rejects an ineligible quest: %j', async (overrides) => {
@@ -99,10 +100,11 @@ describe('Quest completion reflection', () => {
 
   it('stores the accepted reflection atomically with the reward claim', async () => {
     const tx = {
+      $queryRaw: jest.fn().mockResolvedValue([{ status: 'active' }]),
       dailyQuest: { findUnique: jest.fn().mockResolvedValue(quest), updateMany: jest.fn().mockResolvedValue({ count: 1 }), findUniqueOrThrow: jest.fn().mockResolvedValue({ ...quest, status: 'completed', verificationAnswer: answer, verificationFeedback: '다시 도전할 용기를 발견했네요!', completedAt: new Date() }) },
       questCompletionLog: { aggregate: jest.fn().mockResolvedValue({ _sum: { goldReward: 0 } }), count: jest.fn().mockResolvedValue(0), create: jest.fn() },
       rankingPointLog: { aggregate: jest.fn().mockResolvedValue({ _sum: { finalPoint: 0 } }), create: jest.fn() },
-      user: { findUnique: jest.fn().mockResolvedValue({ gold: 0, totalExp: 0, level: 1 }), update: jest.fn() },
+      user: { update: jest.fn().mockResolvedValue({ gold: 0, totalExp: 0, level: 1 }) },
       attendance: { findUnique: jest.fn().mockResolvedValue({ checked: true }) },
     };
     ranking.ensureCurrentSeason.mockResolvedValue({ id: 'season-1' });

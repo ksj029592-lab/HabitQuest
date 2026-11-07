@@ -61,6 +61,19 @@ describe('AiService', () => {
       expect(result.every((quest) => quest.difficulty === 'easy')).toBe(true);
     });
 
+    it('rejects incomplete or duplicate generated quest content before persistence', async () => {
+      const router = new ModelRouterClient();
+      jest.spyOn(router, 'isConfigured').mockReturnValue(true);
+      jest.spyOn(router, 'completeJson').mockResolvedValue({
+        quests: [
+          { title: ' 같은 퀘스트 ', description: '실천을 기록하세요.' },
+          { title: '같은 퀘스트', description: '오늘 기록을 남기세요.' },
+          { title: '세 번째', description: { invalid: true } },
+        ],
+      });
+      await expect(new AiService(router).generateQuests({ personaName: '초심자', habits: ['독서'] })).rejects.toThrow('Router의 퀘스트 응답');
+    });
+
     it('does not hide a configured Router failure behind local fallback quests', async () => {
       const router = new ModelRouterClient();
       jest.spyOn(router, 'isConfigured').mockReturnValue(true);

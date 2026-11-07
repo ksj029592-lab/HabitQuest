@@ -10,6 +10,7 @@ class GenerateQuestsDto {
   @IsArray()
   @ArrayMaxSize(8)
   @IsString({ each: true })
+  @MaxLength(80, { each: true })
   habits!: string[];
 
   @IsOptional()

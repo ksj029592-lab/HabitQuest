@@ -2,7 +2,7 @@
  * Glassmorphism 탭바 컴포넌트
  */
 import React from 'react';
-import { ChartNoAxesCombined, ListChecks, ShoppingBag, Trophy, UserRound } from 'lucide-react';
+import { FieldIcon } from './FieldArt';
 
 interface TabItem {
   id: string;
@@ -12,11 +12,11 @@ interface TabItem {
 }
 
 const DEFAULT_TABS: TabItem[] = [
-  { id: 'quests', label: '오늘의 퀘스트', icon: <ListChecks size={20} /> },
-  { id: 'stats', label: '활동 통계', icon: <ChartNoAxesCombined size={20} /> },
-  { id: 'shop', label: '보상 상점', icon: <ShoppingBag size={20} /> },
-  { id: 'profile', label: '내 프로필', icon: <UserRound size={20} /> },
-  { id: 'ranking', label: '시즌 랭킹', icon: <Trophy size={20} /> },
+  { id: 'quests', label: '오늘의 퀘스트', icon: <FieldIcon name="journal" /> },
+  { id: 'stats', label: '활동 통계', icon: <FieldIcon name="map" /> },
+  { id: 'shop', label: '보상 상점', icon: <FieldIcon name="satchel" /> },
+  { id: 'profile', label: '내 프로필', icon: <FieldIcon name="badge" /> },
+  { id: 'ranking', label: '시즌 랭킹', icon: <FieldIcon name="flag" /> },
 ];
 
 interface TabBarProps extends React.HTMLAttributes<HTMLDivElement> {

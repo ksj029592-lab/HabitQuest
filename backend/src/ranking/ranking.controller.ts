@@ -1,24 +1,22 @@
-import { Controller, Get } from '@nestjs/common';
+import { Controller, Get, Headers, ServiceUnavailableException } from '@nestjs/common';
 import { RankingService } from './ranking.service';
 
 @Controller('ranking')
 export class RankingController {
   constructor(private readonly rankingService: RankingService) {}
 
+  @Get('rewards')
+  async rewards(@Headers('x-user-id') userId: string) {
+    return { success: true, data: await this.rankingService.getSeasonRewards(userId) };
+  }
+
   @Get('current')
   async getCurrentSeasonRanking() {
     try {
-      return {
-        success: true,
-        data: await this.rankingService.getCurrentSeasonRanking(),
-      };
-    } catch (error) {
-      console.error('Ranking data unavailable:', error);
-      return {
-        success: true,
-        data: [],
-        degraded: true,
-      };
+      const { entries, season } = await this.rankingService.getCurrentSeasonRanking();
+      return { success: true, data: entries, season };
+    } catch {
+      throw new ServiceUnavailableException('랭킹을 불러오지 못했어요.');
     }
   }
 }

@@ -1,11 +1,12 @@
 /**
  * 페르소나 서비스
  */
-import { Injectable } from '@nestjs/common';
+import { BadRequestException, Injectable } from '@nestjs/common';
 import { PrismaService } from '@/prisma/prisma.service';
 import { AiService } from '@/ai/ai.service';
 import { CreateSessionDto, SessionResponseDto } from './persona.dto';
-import { v4 as uuidv4 } from 'uuid';
+import { randomUUID } from 'node:crypto';
+import { questCategoryIds } from '@/common/habit-categories';
 import { COSMETICS } from '@/common/game-catalog';
 
 @Injectable()
@@ -31,105 +32,112 @@ export class PersonaService {
    */
   async createSession(input: CreateSessionDto): Promise<SessionResponseDto> {
     // 페르소나 조회
+    const personaId = input.personaId.trim();
+    const habits = [...new Set((input.habits ?? []).map((habit) => habit.trim()))];
+    const note = input.note?.trim() ?? '';
+    const difficulty = input.difficulty ?? 'normal';
     const persona = await this.prisma.testPersona.findFirst({
       where: {
-        OR: [{ id: input.personaId }, { role: input.personaId }],
+        OR: [{ id: personaId }, { role: personaId }],
       },
     });
 
     if (!persona) {
-      throw new Error('페르소나를 찾을 수 없습니다');
+      throw new BadRequestException('페르소나를 찾을 수 없습니다');
     }
 
     const generatedQuests = await this.aiService.generateQuests({
       personaName: persona.name,
-      habits: input.habits ?? [],
-      note: input.note ?? '',
-      difficulty: input.difficulty ?? 'normal',
+      habits,
+      note,
+      difficulty,
     });
 
-    // 새 사용자 생성 (각 세션마다)
-    const userId = uuidv4();
-    const user = await this.prisma.user.create({
-      data: {
-        id: userId,
-        personaId: persona.id,
-        level: persona.initialLevel,
-        totalExp: (persona.initialLevel - 1) * 300,
-        gold: persona.initialGold,
-        habits: input.habits ?? [],
-        note: input.note ?? '',
-        preferredDifficulty: input.difficulty ?? 'normal',
-        avatarIndex: persona.role === 'advanced' ? 4 : persona.role === 'active' ? 2 : 0,
-      },
-    });
-
-    // Streak 초기화
-    await this.prisma.streak.create({
-      data: {
-        userId,
-        currentStreak: persona.initialStreak,
-        bestStreak: persona.bestStreak,
-      },
-    });
-
-    // Inventory 초기화
-    await this.prisma.inventory.create({
-      data: {
-        userId,
-        itemType: 'protection_ticket',
-        itemId: 'default',
-        rarity: 'common',
-        quantity: persona.role === 'advanced' ? 3 : persona.role === 'active' ? 2 : 0,
-      },
-    });
-
-    const initialItems = persona.role === 'advanced' ? ['border_rainbow_ring', '전설의'] : persona.role === 'active' ? ['border_gold_frame', '부지런한'] : [];
-    for (const itemId of initialItems) {
-      await this.prisma.inventory.create({ data: { userId, itemId, itemType: 'cosmetic', rarity: COSMETICS[itemId].rarity, quantity: 1 } });
-    }
-
-    // 오늘 퀘스트 생성
-    const categories = await this.getOrCreateCategories(input.habits ?? []);
-
-    for (const [index, quest] of generatedQuests.entries()) {
-      await this.prisma.dailyQuest.create({
+    const userId = randomUUID();
+    const sessionId = randomUUID();
+    const today = this.getKstDateString();
+    const user = await this.prisma.$transaction(async (tx) => {
+      // 새 사용자 생성 (각 세션마다)
+      const user = await tx.user.create({
         data: {
-          userId,
-          categoryId: categories[index % categories.length].id,
-          questDateKst: quest.questDateKst,
-          difficulty: quest.difficulty,
-          title: quest.title,
-          description: quest.description,
-          status: 'pending',
-          expReward: quest.expReward,
-          goldReward: quest.goldReward,
-          slotNo: index,
+          id: userId,
+          personaId: persona.id,
+          level: persona.initialLevel,
+          totalExp: (persona.initialLevel - 1) * 300,
+          gold: persona.initialGold,
+          habits,
+          note,
+          preferredDifficulty: difficulty,
+          avatarIndex: persona.role === 'advanced' ? 4 : persona.role === 'active' ? 2 : 0,
         },
       });
-    }
 
-    // 출석 기록
-    const today = this.getKstDateString();
-    await this.prisma.attendance.upsert({
-      where: { userId_dateKst: { userId, dateKst: today } },
-      update: { checked: false },
-      create: { userId, dateKst: today, checked: false },
-    });
+      // Streak 초기화
+      await tx.streak.create({
+        data: {
+          userId,
+          currentStreak: persona.initialStreak,
+          bestStreak: persona.bestStreak,
+        },
+      });
 
-    // 세션 생성
-    const sessionId = uuidv4();
-    await this.prisma.userSession.create({
-      data: {
-        personaId: input.personaId,
-        sessionId,
-        userId,
-      },
+      // Inventory 초기화
+      await tx.inventory.create({
+        data: {
+          userId,
+          itemType: 'protection_ticket',
+          itemId: 'default',
+          rarity: 'common',
+          quantity: persona.role === 'advanced' ? 3 : persona.role === 'active' ? 2 : 0,
+        },
+      });
+
+      const initialItems = persona.role === 'advanced' ? ['border_rainbow_ring', '전설의'] : persona.role === 'active' ? ['border_gold_frame', '부지런한'] : [];
+      for (const itemId of initialItems) {
+        await tx.inventory.create({ data: { userId, itemId, itemType: 'cosmetic', rarity: COSMETICS[itemId].rarity, quantity: 1 } });
+      }
+
+      // 오늘 퀘스트 생성
+      const categoryIds = await questCategoryIds(tx, habits, generatedQuests);
+
+      for (const [index, quest] of generatedQuests.entries()) {
+        await tx.dailyQuest.create({
+          data: {
+            userId,
+            categoryId: categoryIds[index],
+            questDateKst: today,
+            difficulty: quest.difficulty,
+            title: quest.title,
+            description: quest.description,
+            status: 'pending',
+            expReward: quest.expReward,
+            goldReward: quest.goldReward,
+            slotNo: index,
+          },
+        });
+      }
+
+      // 출석 기록
+      await tx.attendance.upsert({
+        where: { userId_dateKst: { userId, dateKst: today } },
+        update: { checked: false },
+        create: { userId, dateKst: today, checked: false },
+      });
+
+      // 세션 생성
+      await tx.userSession.create({
+        data: {
+          personaId: persona.id,
+          sessionId,
+          userId,
+        },
+      });
+      return user;
     });
 
     return {
       sessionId,
-      personaId: input.personaId,
+      personaId: persona.id,
       startedAt: new Date().toISOString(),
       personaData: {
         userId,
@@ -159,7 +167,7 @@ export class PersonaService {
         inventory: [
           {
             itemType: 'protection_ticket',
-            quantity: 0,
+            quantity: persona.role === 'advanced' ? 3 : persona.role === 'active' ? 2 : 0,
             name: '방지권',
           },
         ],
@@ -195,22 +203,4 @@ export class PersonaService {
     return `${values.year}-${values.month}-${values.day}`;
   }
 
-  /**
-   * 기본 카테고리 조회 또는 생성
-   */
-  private async getOrCreateCategories(habits: string[]) {
-    const categoryNames = habits.length > 0 ? [...new Set(habits)] : ['독서', '운동', '공부'];
-    const categories = [];
-
-    for (const name of categoryNames) {
-      const category = await this.prisma.habitCategory.upsert({
-        where: { name },
-        update: {},
-        create: { name },
-      });
-      categories.push(category);
-    }
-
-    return categories;
-  }
 }

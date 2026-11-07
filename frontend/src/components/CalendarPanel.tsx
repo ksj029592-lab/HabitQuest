@@ -20,6 +20,7 @@ export const CalendarPanel = ({ serverBacked, onRefresh }: { serverBacked: boole
     if (!serverBacked) { setLoading(false); return; }
     let cancelled = false;
     setLoading(true);
+    setCalendar(null);
     setError('');
     void userApi.getCalendar(month).then((result) => {
       if (!result.success || !result.data) throw new Error(result.error?.message || '캘린더를 불러오지 못했어요.');

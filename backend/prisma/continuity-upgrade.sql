@@ -1,0 +1,10 @@
+BEGIN;
+
+CREATE TABLE IF NOT EXISTS "profile_photos" (
+  "userId" TEXT PRIMARY KEY REFERENCES "users"("id") ON DELETE CASCADE,
+  "jpeg" TEXT NOT NULL
+);
+
+ALTER TABLE "users" ADD COLUMN IF NOT EXISTS "equippedBackground" TEXT;
+
+COMMIT;

@@ -2,7 +2,7 @@ import { AiService, GeneratedQuest } from '@/ai/ai.service';
 import { PrismaService } from '@/prisma/prisma.service';
 import { PersonaService } from './persona.service';
 
-jest.mock('uuid', () => ({ v4: () => 'generated-uuid' }));
+jest.mock('node:crypto', () => ({ ...jest.requireActual('node:crypto'), randomUUID: () => 'generated-uuid' }));
 
 describe('PersonaService', () => {
   it('persists generated quests using the selected habits and difficulty', async () => {
@@ -31,7 +31,7 @@ describe('PersonaService', () => {
       rankingPointReward: 10,
       slotNo: slotNo as 0 | 1 | 2,
     }));
-    const prisma = {
+    const transaction = {
       testPersona: { findFirst: jest.fn().mockResolvedValue(persona) },
       user: { create: jest.fn().mockResolvedValue({ id: 'user-1', level: 1, totalExp: 0, gold: 0 }) },
       streak: { create: jest.fn() },
@@ -45,6 +45,7 @@ describe('PersonaService', () => {
       attendance: { upsert: jest.fn() },
       userSession: { create: jest.fn() },
     };
+    const prisma = { testPersona: transaction.testPersona, $transaction: (operation: (tx: typeof transaction) => unknown) => operation(transaction) };
     const aiService = { generateQuests: jest.fn().mockResolvedValue(generatedQuests) };
     const PersonaServiceWithAi = PersonaService as unknown as new (
       prisma: PrismaService,
@@ -73,7 +74,7 @@ describe('PersonaService', () => {
       note: '',
       difficulty: 'easy',
     });
-    expect(prisma.dailyQuest.create).toHaveBeenCalledWith({
+    expect(transaction.dailyQuest.create).toHaveBeenCalledWith({
       data: expect.objectContaining({
         userId: 'generated-uuid',
         categoryId: 'category-운동과 건강',
@@ -83,6 +84,6 @@ describe('PersonaService', () => {
         slotNo: 0,
       }),
     });
-    expect(prisma.dailyQuest.create).toHaveBeenCalledTimes(3);
+    expect(transaction.dailyQuest.create).toHaveBeenCalledTimes(3);
   });
 });

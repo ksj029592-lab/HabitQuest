@@ -2,10 +2,12 @@
  * 퀘스트 서비스
  */
 import { BadRequestException, Injectable } from '@nestjs/common';
+import { Prisma } from '@prisma/client';
 import { PrismaService } from '@/prisma/prisma.service';
 import { QuestResponseDto } from './quest.dto';
 import { RankingService } from '@/ranking/ranking.service';
 import { AiService } from '@/ai/ai.service';
+import { questCategoryIds } from '@/common/habit-categories';
 import { getRankingPointReward } from '@/common/ranking-points';
 
 interface RerollInput {
@@ -17,6 +19,11 @@ interface RerollInput {
 interface EnsureInput extends RerollInput {
   difficulty?: 'easy' | 'normal' | 'hard';
 }
+
+const questDetails = {
+  category: { select: { name: true } },
+  completionLog: { orderBy: { createdAt: 'desc' }, take: 1 },
+} satisfies Prisma.DailyQuestInclude;
 
 @Injectable()
 export class QuestService {
@@ -33,6 +40,8 @@ export class QuestService {
       id: string;
       userId: string;
       categoryId: string;
+      category?: { name: string };
+      completionLog?: Array<{ expReward: number; goldReward: number; rankingPointAwarded: number }>;
       questDateKst: string;
       difficulty: string;
       title: string;
@@ -46,21 +55,26 @@ export class QuestService {
       verificationAnswer?: string | null;
       verificationFeedback?: string | null;
     },
-    overrides: { goldReward?: number; rankingPointAwarded?: number } = {},
+    overrides: Partial<Pick<QuestResponseDto, 'goldReward' | 'rankingPointAwarded' | 'rewardAdjustments' | 'levelUp'>> = {},
   ): QuestResponseDto {
+    const receipt = quest.completionLog?.[0];
+    const goldReward = overrides.goldReward ?? receipt?.goldReward ?? quest.goldReward;
     return {
       id: quest.id,
       userId: quest.userId,
       categoryId: quest.categoryId,
+      categoryName: quest.category?.name,
       questDateKst: quest.questDateKst,
       difficulty: quest.difficulty,
       title: quest.title,
       description: quest.description,
       status: quest.status,
-      expReward: quest.expReward,
-      goldReward: overrides.goldReward ?? quest.goldReward,
+      expReward: receipt?.expReward ?? quest.expReward,
+      goldReward,
       rankingPointReward: getRankingPointReward(quest.difficulty),
-      rankingPointAwarded: overrides.rankingPointAwarded,
+      rankingPointAwarded: overrides.rankingPointAwarded ?? receipt?.rankingPointAwarded,
+      rewardAdjustments: overrides.rewardAdjustments ?? (receipt && goldReward < quest.goldReward ? ['daily_gold_cap'] : undefined),
+      levelUp: overrides.levelUp,
       verificationQuestion: quest.verificationQuestion ?? undefined,
       verificationAnswer: quest.verificationAnswer ?? undefined,
       verificationFeedback: quest.verificationFeedback ?? undefined,
@@ -74,10 +88,10 @@ export class QuestService {
     const quests = await this.prisma.dailyQuest.findMany({
       where: { userId, questDateKst: today },
       orderBy: { slotNo: 'asc' },
-      include: { completionLog: { orderBy: { createdAt: 'desc' }, take: 1 } },
+      include: questDetails,
     });
 
-    return quests.map((quest) => this.toDto(quest, { goldReward: quest.completionLog?.[0]?.goldReward, rankingPointAwarded: quest.completionLog?.[0]?.rankingPointAwarded }));
+    return quests.map((quest) => this.toDto(quest));
   }
 
   async getQuestHistory(userId: string) {
@@ -85,9 +99,9 @@ export class QuestService {
       where: { userId, status: 'completed' },
       orderBy: [{ questDateKst: 'desc' }, { slotNo: 'asc' }],
       take: 90,
-      include: { completionLog: { orderBy: { createdAt: 'desc' }, take: 1 } },
+      include: questDetails,
     });
-    return quests.map((quest) => this.toDto(quest, { goldReward: quest.completionLog[0]?.goldReward, rankingPointAwarded: quest.completionLog[0]?.rankingPointAwarded }));
+    return quests.map((quest) => this.toDto(quest));
   }
 
   /**
@@ -110,17 +124,14 @@ export class QuestService {
       note: input.note,
       difficulty: input.difficulty ?? 'normal',
     });
-    const categoryNames = input.habits.length > 0 ? [...new Set(input.habits)] : ['독서', '운동', '공부'];
-    const categories = [];
-    for (const name of categoryNames) {
-      categories.push(await this.prisma.habitCategory.upsert({ where: { name }, update: {}, create: { name } }));
-    }
-
     return this.prisma.$transaction(async (tx) => {
+      await tx.user.update({ where: { id: userId }, data: { updatedAt: new Date() } });
+      if (today !== this.getKstDateString()) throw new BadRequestException('날짜가 바뀌었어요. 오늘의 퀘스트를 다시 요청해 주세요.');
       const already = await tx.dailyQuest.count({ where: { userId, questDateKst: today } });
       if (already > 0) {
         const quests = await tx.dailyQuest.findMany({
           where: { userId, questDateKst: today },
+          include: questDetails,
           orderBy: { slotNo: 'asc' },
         });
         return { created: false, streakReset: false, protectionUsed: false, quests: quests.map((q) => this.toDto(q)) };
@@ -145,11 +156,12 @@ export class QuestService {
         }
       }
 
+      const categoryIds = await questCategoryIds(tx, input.habits, generated);
       for (const [index, quest] of generated.entries()) {
         await tx.dailyQuest.create({
           data: {
             userId,
-            categoryId: categories[index % categories.length].id,
+            categoryId: categoryIds[index],
             questDateKst: today,
             difficulty: quest.difficulty,
             title: quest.title,
@@ -164,6 +176,7 @@ export class QuestService {
 
       const quests = await tx.dailyQuest.findMany({
         where: { userId, questDateKst: today },
+        include: questDetails,
         orderBy: { slotNo: 'asc' },
       });
       return { created: true, streakReset, protectionUsed, quests: quests.map((q) => this.toDto(q)) };
@@ -180,14 +193,13 @@ export class QuestService {
     const today = this.getKstDateString();
     const monthStart = `${today.slice(0, 7)}-01`;
     const season = await this.rankingService.ensureCurrentSeason();
-    const [streak, inventory, points, attendance] = await Promise.all([
+    const [streak, inventory, points] = await Promise.all([
       this.prisma.streak.findUnique({ where: { userId } }),
       this.prisma.inventory.findMany({ where: { userId } }),
       this.prisma.rankingPointLog.aggregate({
         _sum: { finalPoint: true },
         where: { userId, seasonId: season.id },
       }),
-      this.prisma.attendance.findUnique({ where: { userId_dateKst: { userId, dateKst: today } } }),
     ]);
 
     const monthFilter = { userId, questDateKst: { gte: monthStart, lte: today } };
@@ -212,6 +224,7 @@ export class QuestService {
       equippedTitle: user.equippedTitle,
       equippedBorder: user.equippedBorder,
       equippedDecoration: user.equippedDecoration,
+      equippedBackground: user.equippedBackground,
       specialAvatarId: user.specialAvatarId,
       reminderEnabled: user.reminderEnabled,
       reminderTime: user.reminderTime,
@@ -232,7 +245,7 @@ export class QuestService {
         quantity: item.quantity,
       })),
       seasonRankingPoints: points._sum.finalPoint ?? 0,
-      todayChecked: attendance?.checked ?? false,
+      todayChecked: attended.some((entry) => entry.dateKst === today),
     };
   }
 
@@ -267,6 +280,8 @@ export class QuestService {
     });
 
     return this.prisma.$transaction(async (tx) => {
+      await tx.user.update({ where: { id: userId }, data: { updatedAt: new Date() } });
+      if (today !== this.getKstDateString()) throw new BadRequestException('날짜가 바뀌었어요. 오늘의 퀘스트를 확인해 주세요.');
       const used = await tx.inventory.updateMany({
         where: { id: ticket.id, quantity: { gte: 1 } },
         data: { quantity: { decrement: 1 } },
@@ -282,12 +297,13 @@ export class QuestService {
         throw new Error('퀘스트 상태가 변경되어 리롤할 수 없습니다');
       }
 
+      const categoryIds = await questCategoryIds(tx, input.habits, generated.slice(0, pending.length));
       for (const [index, old] of pending.entries()) {
         const next = generated[index % generated.length];
         await tx.dailyQuest.create({
           data: {
             userId,
-            categoryId: old.categoryId,
+            categoryId: categoryIds[index],
             questDateKst: today,
             difficulty: next.difficulty,
             title: next.title,
@@ -302,6 +318,7 @@ export class QuestService {
 
       const quests = await tx.dailyQuest.findMany({
         where: { userId, questDateKst: today },
+        include: questDetails,
         orderBy: { slotNo: 'asc' },
       });
       const updatedTicket = await tx.inventory.findUniqueOrThrow({ where: { id: ticket.id } });
@@ -320,7 +337,7 @@ export class QuestService {
   async getVerificationQuestion(questId: string, userId?: string) {
     const quest = await this.getVerifiableQuest(questId, userId);
     if (quest.verificationQuestion) return { question: quest.verificationQuestion };
-    const generated = await this.aiService.createReflectionQuestion(quest);
+    const generated = await this.aiService.createReflectionQuestion({ title: quest.title, description: quest.description });
     await this.prisma.dailyQuest.updateMany({
       where: { id: questId, userId, status: 'pending', verificationQuestion: null, questDateKst: this.getKstDateString() },
       data: { verificationQuestion: generated.question },
@@ -341,6 +358,7 @@ export class QuestService {
 
   async completeQuest(questId: string, userId?: string, answer?: string): Promise<QuestResponseDto> {
     const trimmedAnswer = answer?.trim();
+    if (!userId) throw new BadRequestException('사용자 세션이 필요합니다');
     if (!trimmedAnswer || trimmedAnswer.length > 2000) throw new BadRequestException('활동에 대한 답변을 2,000자 이내로 남겨 주세요.');
     const snapshot = await this.getVerifiableQuest(questId, userId);
     if (!snapshot.verificationQuestion) throw new BadRequestException('먼저 퀘스트 질문을 열어 주세요.');
@@ -352,6 +370,15 @@ export class QuestService {
     });
     if (!review.approved) throw new BadRequestException(review.feedback);
     return this.prisma.$transaction(async (tx) => {
+      const started = new Date();
+      const season = await this.rankingService.ensureCurrentSeason(tx, started);
+      const active = await tx.$queryRaw<Array<{ status: string }>>`SELECT "status" FROM "ranking_seasons" WHERE "id" = ${season.id} FOR SHARE`;
+      if (active[0]?.status !== 'active') throw new BadRequestException('시즌 정산이 끝난 퀘스트예요.');
+      // Serialize rewards with other completions, shop purchases and reward claims for this user.
+      const user = await tx.user.update({ where: { id: userId }, data: { updatedAt: new Date() } });
+      const now = new Date();
+      const today = this.getKstDateString(now);
+      if (today !== this.getKstDateString(started)) throw new BadRequestException('날짜가 바뀌었어요. 오늘의 퀘스트를 확인해 주세요.');
       const quest = await tx.dailyQuest.findUnique({ where: { id: questId } });
 
       if (!quest) {
@@ -363,15 +390,13 @@ export class QuestService {
       }
 
       const claimed = await tx.dailyQuest.updateMany({
-        where: { id: questId, userId, status: 'pending', questDateKst: this.getKstDateString(), verificationQuestion: snapshot.verificationQuestion },
-        data: { status: 'completed', completedAt: new Date(), verificationAnswer: trimmedAnswer, verificationFeedback: review.feedback },
+        where: { id: questId, userId, status: 'pending', questDateKst: today, verificationQuestion: snapshot.verificationQuestion },
+        data: { status: 'completed', completedAt: now, verificationAnswer: trimmedAnswer, verificationFeedback: review.feedback },
       });
       if (claimed.count !== 1) {
         throw new Error('이미 완료된 퀘스트입니다');
       }
 
-      const now = new Date();
-      const today = this.getKstDateString(now);
       const todayStart = new Date(`${today}T00:00:00+09:00`);
       const tomorrowStart = new Date(todayStart.getTime() + 24 * 60 * 60 * 1000);
       const earnedToday = await tx.questCompletionLog.aggregate({
@@ -383,7 +408,6 @@ export class QuestService {
       });
       const remainingGold = Math.max(0, 300 - (earnedToday._sum.goldReward || 0));
       const awardedGold = Math.min(quest.goldReward, remainingGold);
-      const season = await this.rankingService.ensureCurrentSeason(tx);
       const repeatedCategoryCount = await tx.questCompletionLog.count({
         where: {
           userId: quest.userId,
@@ -411,6 +435,7 @@ export class QuestService {
           expReward: quest.expReward,
           goldReward: awardedGold,
           rankingPointAwarded: rankingPoint.finalPoint,
+          createdAt: now,
         },
       });
       await tx.rankingPointLog.create({
@@ -422,19 +447,15 @@ export class QuestService {
           multiplier: 1,
           penaltyRate: rankingPoint.penaltyRate,
           finalPoint: rankingPoint.finalPoint,
+          createdAt: now,
         },
       });
-
-      const user = await tx.user.findUnique({ where: { id: quest.userId } });
-      if (!user) {
-        throw new Error('사용자를 찾을 수 없습니다');
-      }
 
       const newExp = user.totalExp + quest.expReward;
       const newLevel = Math.max(user.level, Math.floor(newExp / 300) + 1);
       await tx.user.update({
         where: { id: quest.userId },
-        data: { gold: user.gold + awardedGold, totalExp: newExp, level: newLevel },
+        data: { gold: { increment: awardedGold }, totalExp: newExp, level: newLevel },
       });
 
       const attendance = await tx.attendance.findUnique({
@@ -476,10 +497,16 @@ export class QuestService {
         }
       }
 
-      const updatedQuest = await tx.dailyQuest.findUniqueOrThrow({ where: { id: questId } });
+      const updatedQuest = await tx.dailyQuest.findUniqueOrThrow({ where: { id: questId }, include: questDetails });
       return this.toDto(updatedQuest, {
         goldReward: awardedGold,
         rankingPointAwarded: rankingPoint.finalPoint,
+        levelUp: newLevel > user.level ? newLevel : undefined,
+        rewardAdjustments: [
+          ...(awardedGold < quest.goldReward ? ['daily_gold_cap'] as const : []),
+          ...(rankingPoint.penaltyRate ? ['repeated_category'] as const : []),
+          ...(rankingPoint.finalPoint < Math.round(getRankingPointReward(quest.difficulty) * (1 - rankingPoint.penaltyRate)) ? ['daily_point_cap'] as const : []),
+        ],
       });
     });
   }

@@ -8,10 +8,26 @@ export interface SeasonRankingEntry {
   level: number;
   points: number;
   rank: number;
+  avatarIndex?: number;
+  specialAvatarId?: string | null;
+  equippedTitle?: string | null;
+  equippedBorder?: string | null;
+  equippedDecoration?: string | null;
 }
 
+export interface SeasonPeriod {
+  yearMonth: string;
+  startAt: string;
+  endAt: string;
+}
+
+export type SeasonRankingResponse = ApiResponse<SeasonRankingEntry[]> & { season?: SeasonPeriod };
+
+export interface SeasonReward { id: string; month: string; band: string; label: string }
+
 export const rankingApi = {
-  getCurrentSeasonRanking: async (): Promise<ApiResponse<SeasonRankingEntry[]>> => {
+  getRewards: () => apiClient.get<SeasonReward[]>('/ranking/rewards'),
+  getCurrentSeasonRanking: async (): Promise<SeasonRankingResponse> => {
     return apiClient.get<SeasonRankingEntry[]>('/ranking/current');
   },
 };
