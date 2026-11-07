@@ -4,6 +4,7 @@ import { FieldIcon, TrailSketch } from './FieldArt';
 import { Button } from './Button';
 import { QuestCard } from './QuestCard';
 import { AvatarFrame } from './AvatarFrame';
+import { Nameplate } from './AchievementCollection';
 import { DailySummary } from './DailySummary';
 
 interface QuestDashboardProps {
@@ -86,7 +87,7 @@ export function QuestDashboard({ persona, quests, loading, rerolling, error, exp
 
         <aside className="hq-journey-aside" aria-label="성장과 보상">
           <section className="hq-journey-card">
-            <div className="hq-growth-avatar"><AvatarFrame avatarIndex={persona.avatarIndex} specialAvatarId={persona.specialAvatarId} equippedBorder={persona.equippedBorder} equippedDecoration={persona.equippedDecoration} size="sm" /><span>Lv.{persona.level} · {persona.equippedTitle || '나의 성장'}</span></div>
+            <div className="hq-growth-avatar"><AvatarFrame avatarIndex={persona.avatarIndex} specialAvatarId={persona.specialAvatarId} equippedBorder={persona.equippedBorder} equippedDecoration={persona.equippedDecoration} size="sm" /><span>Lv.{persona.level} · <Nameplate name={persona.persona?.name || '모험가'} title={persona.equippedTitle}/></span></div>
             <h3>다음 레벨까지</h3>
             <p className="hq-xp-value">{(expPerLevel - currentExp).toLocaleString()} <small>XP 남음</small></p>
             <progress max={expPerLevel} value={currentExp} aria-label="다음 레벨 경험치 진행률" />

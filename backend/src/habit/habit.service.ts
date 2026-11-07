@@ -42,6 +42,8 @@ export class HabitService {
       const versions = same ? history : [...history.filter((version) => version.from < from), { from, ...next }];
       const data = { name: input.name.trim(), description: input.description.trim(), note: input.note.trim(), scheduleHistory: versions as unknown as Prisma.InputJsonValue };
       const saved = existing ? await tx.userHabit.update({ where: { id }, data }) : await tx.userHabit.create({ data: { ...data, userId } });
+      if(!existing) await tx.inventory.upsert({where:{userId_itemType_itemId:{userId,itemType:'achievement_event',itemId:'habit:'+saved.id}},create:{userId,itemType:'achievement_event',itemId:'habit:'+saved.id,quantity:1},update:{}});
+      if(existing&&!same || !existing&&input.mode!=='daily') await tx.inventory.upsert({where:{userId_itemType_itemId:{userId,itemType:'achievement_event',itemId:'schedule'}},create:{userId,itemType:'achievement_event',itemId:'schedule',quantity:1},update:{}});
       // Legacy clients keep the same preference shape; managed habits remain the source of truth.
       await tx.user.update({ where: { id: userId }, data: { habits: [...habits.filter((habit) => !habit.archived && habit.id !== id).map((habit) => habit.name), saved.name] } });
       return { id: saved.id, effectiveFrom: from };

@@ -1,0 +1,182 @@
+[
+  {
+    "id": "q1",
+    "file": "/trophies/q1.png",
+    "width": 512,
+    "height": 512,
+    "cornerAlpha": 0,
+    "sha256": "AFF07A1F77DDC42C8758A5919C6A52C0D0DB1E035E9B4AFDADA1551DFD18F36D",
+    "sourceFile": "exec-9b7b24ea-224b-4aee-8c9e-e685091deb1b.png"
+  },
+  {
+    "id": "q10",
+    "file": "/trophies/q10.png",
+    "width": 512,
+    "height": 512,
+    "cornerAlpha": 0,
+    "sha256": "4EE47F0270F670DAA75306E280203D2A16F775951F0F3C1D5AE4126DFFA17AEF",
+    "sourceFile": "exec-23eb7708-3eeb-4f6d-941f-c5b50cb52004.png"
+  },
+  {
+    "id": "q30",
+    "file": "/trophies/q30.png",
+    "width": 512,
+    "height": 512,
+    "cornerAlpha": 0,
+    "sha256": "31F1172FBFB5C3A3CCC23D226FD383587F65B4C48A95C448ECF191579408EB53",
+    "sourceFile": "exec-89f6d256-086a-48b9-adc7-b3d5337212d7.png"
+  },
+  {
+    "id": "q100",
+    "file": "/trophies/q100.png",
+    "width": 512,
+    "height": 512,
+    "cornerAlpha": 0,
+    "sha256": "24BBC6E3A57422A803DA4FAE7ED29D179E462A89045772E0DD74010438AA9BAC",
+    "sourceFile": "exec-55e483cb-6637-4ef5-b931-d143404ab5ab.png"
+  },
+  {
+    "id": "s3",
+    "file": "/trophies/s3.png",
+    "width": 512,
+    "height": 512,
+    "cornerAlpha": 0,
+    "sha256": "26BB4AF6EC241E4BD5F338D8B40CFFBA791591EC5ECD74C5A7F3DD7EF92DE7C8",
+    "sourceFile": "exec-4e35fd1c-552b-44fa-8d15-8329eda588e0.png"
+  },
+  {
+    "id": "s7",
+    "file": "/trophies/s7.png",
+    "width": 512,
+    "height": 512,
+    "cornerAlpha": 0,
+    "sha256": "601FDE6AF8D96CF6FD2ACEF6AE9B992A4E4D36D37C1B740F37775EA10B6DA1DD",
+    "sourceFile": "exec-d0c84b78-5b3f-424f-ac1f-6d113d78a1d9.png"
+  },
+  {
+    "id": "s14",
+    "file": "/trophies/s14.png",
+    "width": 512,
+    "height": 512,
+    "cornerAlpha": 0,
+    "sha256": "63ED4C8D903FD6DE7C317D1E6CBED521030D1C6CE2ED206B70A617AF76FADDDF",
+    "sourceFile": "exec-75f0354e-0049-49fb-9e52-126a88e6c086.png"
+  },
+  {
+    "id": "s30",
+    "file": "/trophies/s30.png",
+    "width": 512,
+    "height": 512,
+    "cornerAlpha": 0,
+    "sha256": "40346D36BD884F4B696A5D0C89E820BB1ECB62F24196243BF08CC282D2B0D433",
+    "sourceFile": "exec-f62bc74b-fb5a-4125-ad39-9c1e90898e7b.png"
+  },
+  {
+    "id": "l5",
+    "file": "/trophies/l5.png",
+    "width": 512,
+    "height": 512,
+    "cornerAlpha": 0,
+    "sha256": "E862E47DE7CBD3AE63659F2EAC9A284EFF6E5F8426495C6EBDC87775702159DB",
+    "sourceFile": "exec-3f7f11b6-6031-4989-b05f-7ebd66521326.png"
+  },
+  {
+    "id": "l10",
+    "file": "/trophies/l10.png",
+    "width": 512,
+    "height": 512,
+    "cornerAlpha": 0,
+    "sha256": "1E7E4B0E33E0827216C7B427A6310D79F8FE2D0AF7E47C2BE739FBF86240F7D4",
+    "sourceFile": "exec-f42866c9-2ac6-465f-9213-c805f28c8b84.png"
+  },
+  {
+    "id": "l20",
+    "file": "/trophies/l20.png",
+    "width": 512,
+    "height": 512,
+    "cornerAlpha": 0,
+    "sha256": "25DD4854462BAC7E78475C924255778442CB8690791942C53D3971E2023CC467",
+    "sourceFile": "exec-88db2a9c-5483-44fb-8451-df2f5231528a.png"
+  },
+  {
+    "id": "g1000",
+    "file": "/trophies/g1000.png",
+    "width": 512,
+    "height": 512,
+    "cornerAlpha": 0,
+    "sha256": "E143296BF85F867C28D4AC446718EFAAE60AF2F846A74D3089E67318D45946BE",
+    "sourceFile": "exec-4fbeeb98-93fa-4dd1-a472-e5bbc8e3982c.png"
+  },
+  {
+    "id": "h1",
+    "file": "/trophies/h1.png",
+    "width": 512,
+    "height": 512,
+    "cornerAlpha": 0,
+    "sha256": "FEE1FFDBFA1695F688D87ABAFE07517ACBE90DFED9D6625159D4ACB61312902C",
+    "sourceFile": "exec-73213e6c-0169-4a3c-8779-f049042b5517.png"
+  },
+  {
+    "id": "h5",
+    "file": "/trophies/h5.png",
+    "width": 512,
+    "height": 512,
+    "cornerAlpha": 0,
+    "sha256": "8B0BBE1158DBDF2A80924B566EC673CABC13C81A5252F66E57DD6693ED441F24",
+    "sourceFile": "exec-b74e5a18-c5f6-49d2-a672-dba012ae12e2.png"
+  },
+  {
+    "id": "schedule",
+    "file": "/trophies/schedule.png",
+    "width": 512,
+    "height": 512,
+    "cornerAlpha": 0,
+    "sha256": "FDAE24D36988858D7A223475D1F31B758123F3BB17904267E6808A88C9826300",
+    "sourceFile": "exec-bf6e16e2-331c-4964-8a91-335cdf070c11.png"
+  },
+  {
+    "id": "weekly",
+    "file": "/trophies/weekly.png",
+    "width": 512,
+    "height": 512,
+    "cornerAlpha": 0,
+    "sha256": "D5AE885E84F966E134F511567EFDF2640E046A84954A9ABAF90651B83FC511D7",
+    "sourceFile": "exec-5d1aab05-af3d-4e0f-8dfd-84860bc03b11.png"
+  },
+  {
+    "id": "buy",
+    "file": "/trophies/buy.png",
+    "width": 512,
+    "height": 512,
+    "cornerAlpha": 0,
+    "sha256": "3E65115B7886B3FCB7BF1941B693CBEF57964C00188CAEBA1997358B918EB44B",
+    "sourceFile": "exec-5a3ee583-8cc6-4e14-a538-5e421b811389.png"
+  },
+  {
+    "id": "equip",
+    "file": "/trophies/equip.png",
+    "width": 512,
+    "height": 512,
+    "cornerAlpha": 0,
+    "sha256": "505487AC114C7C94C4ACF6024585A2E18949A1898B2048AC306B2A9FF56D9C76",
+    "sourceFile": "exec-de902a35-2a6f-40e7-bbe6-1eef44dbcf3a.png"
+  },
+  {
+    "id": "season",
+    "file": "/trophies/season.png",
+    "width": 512,
+    "height": 512,
+    "cornerAlpha": 0,
+    "sha256": "342E294568D5D31399B61B8905D16594860EE52EAFA082651F3764A50BA1B418",
+    "sourceFile": "exec-6b48180f-98c4-4ba9-97f8-ff4557efd100.png"
+  },
+  {
+    "id": "reward",
+    "file": "/trophies/reward.png",
+    "width": 512,
+    "height": 512,
+    "cornerAlpha": 0,
+    "sha256": "4367FB2DE92F5ED53CFAA9397A6F15436C2C9D360FE9BA4B8A36868E2FD635CD",
+    "sourceFile": "exec-52404452-0322-48ed-bc63-36012ecdea9d.png"
+  }
+]

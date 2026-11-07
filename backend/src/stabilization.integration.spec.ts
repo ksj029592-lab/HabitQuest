@@ -299,6 +299,32 @@ integration('HabitQuest HTTP and isolated PostgreSQL', () => {
     expect((await prisma.dailyQuest.findUniqueOrThrow({ where: { id: 'compat-quest' } })).habitId).toBe(quest.habitId);
   }, 20000);
 
+  it('grants achievement triples once and restricts title equipment without changing currency', async()=>{
+    const userId=randomUUID(), token=randomUUID();
+    await prisma.user.create({data:{id:userId,personaId,gold:77,level:5}});
+    await prisma.userSession.create({data:{sessionId:token,userId,personaId}});
+    const post=(path:string,body:object={})=>api().post(path).set('Authorization','Bearer '+token).send(body);
+    await prisma.$executeRawUnsafe(`CREATE FUNCTION achievement_fail() RETURNS trigger LANGUAGE plpgsql AS 'BEGIN RAISE EXCEPTION ''test trophy failure''; END;'`);
+    try {
+      await prisma.$executeRawUnsafe(`CREATE TRIGGER achievement_fail BEFORE INSERT ON inventory FOR EACH ROW WHEN (NEW."itemType" = 'trophy' AND NEW."userId" = '${userId}') EXECUTE FUNCTION achievement_fail()`);
+      await post('/achievements/check').expect(500);
+      expect(await prisma.inventory.count({where:{userId,itemType:{in:['achievement','achievement_title','trophy']}}})).toBe(0);
+    } finally {
+      await prisma.$executeRawUnsafe('DROP TRIGGER IF EXISTS achievement_fail ON inventory');
+      await prisma.$executeRawUnsafe('DROP FUNCTION IF EXISTS achievement_fail()');
+    }
+    const results=await Promise.all([post('/achievements/check').expect(201),post('/achievements/check').expect(201)]);
+    expect(results[0].body.data).toHaveLength(20);
+    expect(results[0].body.data.find((i:{id:string})=>i.id==='g1000')).toMatchObject({earned:false,progress:null});
+    for(const itemType of ['achievement','achievement_title','trophy'])expect(await prisma.inventory.count({where:{userId,itemType}})).toBe(1);
+    await post('/achievements/title',{id:'achievement_title_q100'}).expect(400);
+    await post('/achievements/title',{id:'achievement_title_l5'}).expect(201);
+    expect((await prisma.user.findUniqueOrThrow({where:{id:userId}})).equippedTitle).toBe('성장의 새싹');
+    await post('/achievements/title',{id:'achievement_title_l5'}).expect(201);
+    expect(await prisma.user.findUniqueOrThrow({where:{id:userId}})).toMatchObject({gold:77,totalExp:0,equippedTitle:null});
+    await api().get('/achievements').expect(401);
+  });
+
   it('limits public signup attempts before invoking AI again', async () => {
     const calls = router.completeJson.mock.calls.length;
     const statuses: number[] = [];

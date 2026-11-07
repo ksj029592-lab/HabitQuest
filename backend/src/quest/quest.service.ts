@@ -256,7 +256,7 @@ export class QuestService {
         bestStreak: streak?.bestStreak ?? 0,
         lastAttendanceDateKst: streak?.lastAttendanceDateKst ?? null,
       },
-      inventory: inventory.map((item) => ({
+      inventory: inventory.filter(item => ['cosmetic','protection_ticket','reroll_ticket'].includes(item.itemType)).map((item) => ({
         itemId: item.itemId,
         name: item.itemType === 'cosmetic' ? item.itemId : item.itemType === 'reroll_ticket' ? '리롤 티켓' : '방지권',
         itemType: item.itemType,

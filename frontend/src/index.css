@@ -800,3 +800,16 @@ input[type='radio'] {
 .hq-season-score { display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px;background:var(--hq-accent-soft);padding:16px;border-radius:8px;color:var(--hq-accent); }
 .hq-season-score strong { font-size:22px; } .hq-season-score small { display:block;font-size:11px;font-weight:500; }
 @media(prefers-reduced-motion:reduce){.hq-season-result-content{animation:none;}}
+.hq-achievements { margin-block:24px; } .hq-achievements h3 { font-size:19px;font-weight:800; }
+.hq-collection-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px;margin-block:16px;}
+.hq-collection-item{display:grid;align-content:start;gap:9px;border:1px solid var(--hq-line);border-radius:9px;padding:16px;background:var(--hq-paper);font-size:12px;overflow-wrap:anywhere;}
+.hq-collection-item h4{font-size:15px;font-weight:800}.hq-collection-item.locked{border-style:dashed}.hq-collection-item.earned{border-color:#8dbdad}
+.hq-trophy-art{display:grid;place-items:center;width:fit-content;padding:16px;background:#eef3f4;color:#647780;border-radius:20%;}.hq-trophy-art.rare{background:#e9f5f1;color:#137b70}.hq-trophy-art.epic{background:#dbeee9;color:#195c56}.hq-trophy-art.legendary{background:#faf4df;color:#87702d;border:1px solid #d9c894}
+.hq-nameplate{display:inline-flex;flex-wrap:wrap;gap:4px 8px;align-items:center;max-width:100%;overflow-wrap:anywhere}.hq-nameplate>span{font-size:11px;padding:3px 8px;background:#e9f5f1;border:1px solid #b5d6cb;border-radius:6px;color:#12675c;}
+.hq-trophy-detail{padding:20px;border:1px solid var(--hq-line);background:var(--hq-paper);display:grid;gap:12px;scroll-margin-top:100px;}
+@media(max-width:650px){.hq-collection-grid{grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}.hq-collection-item{padding:12px}}
+@media(max-width:390px){.hq-collection-grid{grid-template-columns:minmax(0,1fr)}}
+.hq-nameplate>span{display:inline-flex;gap:4px;align-items:center}.hq-nameplate.epic>span{background:#dbeee9;border-color:#74a99a}.hq-nameplate.legendary>span{background:#faf4df;border-color:#d9c894;color:#675623}
+.hq-nameplate.common>span{background:#f1f4f5;border-color:#d8dfe0;color:#5e6c70}.hq-nameplate.epic>span,.hq-nameplate.legendary>span{animation:hq-enter .25s ease-out}
+@media(prefers-reduced-motion:reduce){.hq-nameplate.epic>span,.hq-nameplate.legendary>span{animation:none}}
+.hq-collection-item progress{width:100%;height:6px;accent-color:var(--hq-accent)}

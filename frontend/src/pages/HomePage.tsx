@@ -15,6 +15,7 @@ import { DailyQuest, UserSession } from '@types';
 import { isAxiosError } from 'axios';
 import { applyServerUserState } from '../api/user';
 import { ProgressCenter } from '../components/ProgressCenter';
+import { AchievementCollection, Nameplate } from '../components/AchievementCollection';
 import { ProfileSettings } from '../components/ProfileSettings';
 import { ReminderAgent } from '../components/ReminderAgent';
 import { connectServerSession } from '../api/connectSession';
@@ -335,7 +336,7 @@ const SessionHome = ({ session }: { session: UserSession }) => {
               <ProfilePhoto persona={personaData} onSaved={(replaced) => { if (useSessionStore.getState().session?.sessionId === session.sessionId) updateGameState({ avatarUrl: null, ...(replaced ? { specialAvatarId: null } : {}) }); }} />
 
               <div>
-                <h3 className="text-xl font-extrabold text-white">{personaData.persona?.name}</h3>
+                <h3 className="text-xl font-extrabold text-white"><Nameplate name={personaData.persona?.name || '모험가'} title={personaData.equippedTitle}/></h3>
                 <p className="text-xs text-purple-300 font-medium mt-1">
                   Lv.{currentLevel} • {personaData.equippedTitle || '기본 칭호'}
                 </p>
@@ -462,6 +463,7 @@ const SessionHome = ({ session }: { session: UserSession }) => {
                 </div>
               </div>
             </div>
+            <AchievementCollection onRefresh={() => syncUserState(session.personaData.userId)} />
             <ProfileSettings key={session.sessionId} session={session} onRefresh={() => syncUserState(session.personaData.userId)} />
           </div>
         )}

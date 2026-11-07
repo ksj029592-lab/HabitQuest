@@ -149,6 +149,7 @@ export class ShopService {
       const fields = { border: 'equippedBorder', avatar: 'specialAvatarId', decoration: 'equippedDecoration', title: 'equippedTitle', background: 'equippedBackground' } as const;
       const field = fields[item.slot];
       await tx.user.update({ where: { id: userId }, data: { [field]: user[field] === item.value ? null : item.value } });
+      if(user[field] !== item.value) await tx.inventory.upsert({where:{userId_itemType_itemId:{userId,itemType:'achievement_event',itemId:'equip'}},create:{userId,itemType:'achievement_event',itemId:'equip',quantity:1},update:{}});
       return { itemId, equipped: user[field] !== item.value };
     });
   }

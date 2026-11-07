@@ -6,6 +6,7 @@ import { AvatarFrame, Button, Header } from '@components';
 import { useSessionStore } from '@store';
 import { rankingApi, SeasonPeriod, SeasonRankingEntry, SeasonReward } from '../api/ranking';
 
+import { Nameplate } from '../components/AchievementCollection';
 import { SeasonResults } from '../components/SeasonResults';
 import { FieldIcon, TrailSketch } from '../components/FieldArt';
 
@@ -85,7 +86,7 @@ export function RankingPage() {
           {rows.map((entry) => <li key={entry.userId} className={entry.userId === me?.userId ? 'is-current' : ''}>
             <strong className="hq-ranking-place" aria-label={`${entry.rank}위`}>{String(entry.rank).padStart(2, '0')}</strong>
             <AvatarFrame avatarIndex={entry.avatarIndex} equippedBorder={entry.equippedBorder} specialAvatarId={entry.specialAvatarId} equippedDecoration={entry.equippedDecoration} size="sm" />
-            <div className="hq-ranking-person"><strong>{entry.name} {entry.userId === me?.userId && <small>나</small>}</strong><span>Lv.{entry.level}{entry.equippedTitle && ` · ${entry.equippedTitle}`}</span></div>
+            <div className="hq-ranking-person"><strong><Nameplate name={entry.name} title={entry.equippedTitle}/> {entry.userId === me?.userId && <small>나</small>}</strong><span>Lv.{entry.level}{entry.equippedTitle && ` · ${entry.equippedTitle}`}</span></div>
             <strong className="hq-ranking-score">{entry.points.toLocaleString()} <small>PT</small></strong>
           </li>)}
         </ol>}
