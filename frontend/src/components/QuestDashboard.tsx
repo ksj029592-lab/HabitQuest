@@ -59,7 +59,7 @@ export function QuestDashboard({ persona, quests, loading, rerolling, error, exp
         <div><FieldIcon name="coin" /><span>보유 골드<strong>{persona.gold.toLocaleString()}<small> G</small></strong></span></div>
       </div>
       {!loading && !error && <DailySummary key={quests[0]?.questDateKst} quests={quests} userId={persona.userId} streak={persona.streak.currentStreak} />}
-      <div className="hq-habit-quicklink"><span>오늘 가능한 습관마다 1개씩, 최대 3개의 퀘스트를 만들어요.</span><button type="button" className="hq-text-button" onClick={onHabits}>내 습관 관리 <ArrowRight size={15} /></button></div>
+      <div className="hq-habit-quicklink"><span>오늘 가능한 습관을 바탕으로 하루 퀘스트 3개를 만들어요.</span><button type="button" className="hq-text-button" onClick={onHabits}>내 습관 관리 <ArrowRight size={15} /></button></div>
 
       <div className="hq-quest-workspace">
         <section aria-labelledby="daily-quests-title">

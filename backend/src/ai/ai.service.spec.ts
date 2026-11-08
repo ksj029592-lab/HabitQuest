@@ -65,6 +65,20 @@ describe('AiService', () => {
       await expect(service.generateQuests(input)).rejects.toThrow('Router의 퀘스트 응답');
     });
 
+    it('generates three distinct quests from one habit with or without Router', async () => {
+      const router = new ModelRouterClient();
+      const configured = jest.spyOn(router, 'isConfigured').mockReturnValue(false);
+      const service = new AiService(router);
+      const input = { personaName: '테스트', habits: ['영어'], count: 3, difficulty: 'normal' as const };
+      const fallback = await service.generateQuests(input);
+      expect(fallback).toHaveLength(3);
+      expect(new Set(fallback.map(q => q.title)).size).toBe(3);
+      expect(fallback.every(q => q.categoryId === '영어')).toBe(true);
+      configured.mockReturnValue(true);
+      jest.spyOn(router, 'completeJson').mockResolvedValue({ quests: fallback });
+      await expect(service.generateQuests(input)).resolves.toHaveLength(3);
+    });
+
     it('does not invoke AI or invent habits for an empty candidate list', async () => {
       const router = new ModelRouterClient();
       const complete = jest.spyOn(router, 'completeJson');

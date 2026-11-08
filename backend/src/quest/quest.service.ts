@@ -133,7 +133,7 @@ export class QuestService {
     const generated = candidates.length ? await this.aiService.generateQuests({
       personaName: input.personaName,
       habits: candidates.map((habit) => habit.name),
-      count: candidates.length,
+      count: 3,
       habitContexts: candidates.map(({ name, description, note, schedule, recentTitles }) => ({ name, description, note, schedule, recentTitles })),
       note: input.note,
       difficulty: input.difficulty ?? 'normal',
@@ -300,7 +300,7 @@ export class QuestService {
     const generated = await this.aiService.generateQuests({
       personaName: input.personaName,
       habits: candidates.map((habit) => habit.name),
-      count: candidates.length,
+      count: pending.length,
       habitContexts: candidates.map(({ name, description, note, schedule, recentTitles }) => ({ name, description, note, schedule, recentTitles })),
       note: input.note,
       difficulty,
