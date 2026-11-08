@@ -117,3 +117,33 @@ describe('Quest completion reflection', () => {
     expect(tx.questCompletionLog.create).toHaveBeenCalledTimes(1);
   });
 });
+
+describe('Daily quest slot backfill', () => {
+  it('adds only missing slots and preserves existing completed quests without replaying streak protection', async () => {
+    const existing = { id: 'keep', slotNo: 0, status: 'completed' };
+    const habit = { id: 'h', name: '독서와 학습', archived: false, updatedAt: new Date(), schedule: {}, recentTitles: [] };
+    const created: any[] = [];
+    const tx = {
+      user: { update: jest.fn() }, userHabit: { findMany: jest.fn().mockResolvedValue([habit]) },
+      dailyQuest: {
+        count: jest.fn().mockResolvedValue(1),
+        findMany: jest.fn().mockImplementation(async (args) => args.select ? [existing] : [existing, ...created]),
+        create: jest.fn().mockImplementation(async ({ data }) => { created.push(data); return data; }),
+      },
+      streak: { findUnique: jest.fn().mockResolvedValue({ currentStreak: 5, lastAttendanceDateKst: '2000-01-01' }), update: jest.fn() },
+      inventory: { findFirst: jest.fn() },
+      habitCategory: { upsert: jest.fn().mockResolvedValue({ id: 'cat' }) },
+    };
+    const prisma = { user: { findUnique: jest.fn().mockResolvedValue({ habits: [habit.name], preferredDifficulty: 'normal' }) }, $transaction: jest.fn(async (fn) => fn(tx)) };
+    const ai = { generateQuests: jest.fn().mockResolvedValue([1, 2].map(n => ({ title: `과제 ${n}`, description: '읽기', categoryId: habit.name, difficulty: 'normal', expReward: 100, goldReward: 50 }))) };
+    const service = new QuestService(prisma as any, {} as RankingService, ai as any, { candidates: jest.fn().mockResolvedValue([habit]) } as any);
+    jest.spyOn(service, 'getDailyQuests').mockResolvedValue([existing] as any);
+    jest.spyOn(service as any, 'toDto').mockImplementation(q => q);
+    const result = await service.ensureDailyQuests('u', { personaName: '초심자' } as any);
+    expect(ai.generateQuests).toHaveBeenCalledWith(expect.objectContaining({ count: 2 }));
+    expect(created.map(q => q.slotNo)).toEqual([1, 2]);
+    expect(result.quests[0]).toBe(existing);
+    expect(tx.inventory.findFirst).not.toHaveBeenCalled();
+    expect(tx.streak.update).not.toHaveBeenCalled();
+  });
+});

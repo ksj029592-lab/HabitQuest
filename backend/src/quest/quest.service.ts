@@ -121,7 +121,7 @@ export class QuestService {
   private async ensureDailyQuestsOnce(userId: string, input: EnsureInput) {
     const today = this.getKstDateString();
     const existing = await this.getDailyQuests(userId);
-    if (existing.length > 0) {
+    if (existing.length >= 3) {
       return { created: false, streakReset: false, protectionUsed: false, quests: existing };
     }
 
@@ -133,7 +133,7 @@ export class QuestService {
     const generated = candidates.length ? await this.aiService.generateQuests({
       personaName: input.personaName,
       habits: candidates.map((habit) => habit.name),
-      count: 3,
+      count: 3 - existing.length,
       habitContexts: candidates.map(({ name, description, note, schedule, recentTitles }) => ({ name, description, note, schedule, recentTitles })),
       note: input.note,
       difficulty: input.difficulty ?? 'normal',
@@ -144,7 +144,7 @@ export class QuestService {
       if (candidates.some((habit) => !fresh.some((item) => item.id === habit.id && !item.archived && item.updatedAt.getTime() === habit.updatedAt.getTime()))) throw new BadRequestException('습관 설정이 변경됐어요. 퀘스트를 다시 요청해 주세요.');
       if (today !== this.getKstDateString()) throw new BadRequestException('날짜가 바뀌었어요. 오늘의 퀘스트를 다시 요청해 주세요.');
       const already = await tx.dailyQuest.count({ where: { userId, questDateKst: today } });
-      if (already > 0) {
+      if (already !== existing.length || already >= 3) {
         const quests = await tx.dailyQuest.findMany({
           where: { userId, questDateKst: today },
           include: questDetails,
@@ -158,7 +158,7 @@ export class QuestService {
       const streak = await tx.streak.findUnique({ where: { userId } });
       const yesterday = this.getPreviousKstDateString(today);
       const last = streak?.lastAttendanceDateKst;
-      if (streak && last && last < yesterday && streak.currentStreak > 0) {
+      if (already === 0 && streak && last && last < yesterday && streak.currentStreak > 0) {
         const ticket = await tx.inventory.findFirst({
           where: { userId, itemType: 'protection_ticket', quantity: { gt: 0 } },
         });
@@ -172,6 +172,9 @@ export class QuestService {
         }
       }
 
+      // Re-read slots under the user lock: never replace quests or rewards already stored.
+      const stored = await tx.dailyQuest.findMany({ where: { userId, questDateKst: today }, select: { slotNo: true } });
+      const missingSlots = [0, 1, 2].filter((slot) => !stored.some((quest) => quest.slotNo === slot));
       const categoryIds = await questCategoryIds(tx, candidates.map((habit) => habit.name), generated);
       for (const [index, quest] of generated.entries()) {
         const habit = candidates.find((item) => item.name === quest.categoryId)!;
@@ -188,7 +191,7 @@ export class QuestService {
             status: 'pending',
             expReward: quest.expReward,
             goldReward: quest.goldReward,
-            slotNo: index,
+            slotNo: missingSlots[index],
           },
         });
       }
