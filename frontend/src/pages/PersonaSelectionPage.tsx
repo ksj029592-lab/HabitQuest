@@ -7,7 +7,8 @@ import { PersonaSelector } from '@components';
 import { useSessionStore } from '@store';
 import { personaApi } from '@api';
 import { useQuestStore } from '@store';
-import { TestPersona, UserSession } from '@types';
+import { TestPersona } from '@types';
+import { isAxiosError } from 'axios';
 
 export const PersonaSelectionPage: React.FC = () => {
   const navigate = useNavigate();
@@ -19,11 +20,13 @@ export const PersonaSelectionPage: React.FC = () => {
   const [difficulty, setDifficulty] = useState<'easy' | 'normal' | 'hard'>('normal');
   const [isGenerating, setIsGenerating] = useState(false);
   const [sessionError, setSessionError] = useState('');
+  const [customHabit, setCustomHabit] = useState('');
+  const [extraHabits, setExtraHabits] = useState<string[]>([]);
 
-  const habitOptions = ['운동과 건강', '독서와 학습', '집중력과 생산성', '마음 챙김', '수면 습관', '정리와 생활'];
+  const habitOptions = ['운동과 건강', '독서와 학습', '집중력과 생산성', '마음 챙김', '수면 습관', '정리와 생활', ...extraHabits];
 
   const toggleHabit = (habit: string) => {
-    setHabits((current) => current.includes(habit) ? current.filter((item) => item !== habit) : [...current, habit]);
+    setHabits((current) => current.includes(habit) ? current.filter((item) => item !== habit) : current.length < 8 ? [...current, habit] : current);
   };
 
   const handlePersonaSelected = useCallback((persona: TestPersona) => {
@@ -35,96 +38,28 @@ export const PersonaSelectionPage: React.FC = () => {
     setIsGenerating(true);
     setSessionError('');
     try {
-      let serverResponse: Awaited<ReturnType<typeof personaApi.selectPersona>> | null = null;
-      try {
-        serverResponse = await personaApi.selectPersona(selectedPersona.id, {
-          habits,
-          note,
-          difficulty,
-        });
-      } catch (error) {
-        throw new Error('서버 세션을 시작하지 못했어요. 백엔드·DB·AI 연결을 확인해 주세요.');
+      const response = await personaApi.selectPersona(selectedPersona.id, { habits, note, difficulty });
+      if (!response.success || !response.data) {
+        throw new Error(response.error?.message || '서버 세션 생성에 실패했습니다.');
       }
-
-        // Mock 세션 생성 (사용자 요구사항 userPreferences 포함)
-      const mockSession: UserSession = {
-          sessionId: `session_${Date.now()}`,
-          personaId: selectedPersona.id,
-          startedAt: new Date().toISOString(),
-          lastActivityAt: new Date().toISOString(),
-          personaData: {
-            userId: `user_${Date.now()}`,
-            persona: selectedPersona,
-            level: selectedPersona.initialLevel,
-            totalExp: 0,
-            gold: selectedPersona.initialGold,
-            streak: {
-              currentStreak: selectedPersona.initialStreak,
-              bestStreak: selectedPersona.initialStats.bestStreak,
-              lastAttendanceDateKst: new Date().toISOString().split('T')[0],
-            },
-            attendance: {
-              todayChecked: false,
-              lastSevenDaysKst: [],
-            },
-            inventory: [
-              {
-                itemType: 'protection_ticket',
-                rarity: 'common',
-                quantity: selectedPersona.protectionTickets,
-                name: '방지권',
-              },
-              {
-                itemType: 'cosmetic',
-                rarity: 'common',
-                quantity: 1,
-                name: selectedPersona.equippedTitle || '없음',
-              },
-              {
-                itemType: 'cosmetic',
-                rarity: 'common',
-                quantity: 1,
-                name: selectedPersona.equippedBorder || '없음',
-              },
-            ],
-            stats: {
-              totalQuestsCompleted: selectedPersona.initialStats.totalQuestsCompleted,
-              monthlySuccessRate: selectedPersona.initialStats.monthlySuccessRate,
-              averageStreakLength: 0,
-              thisMonthQuestsCompleted: selectedPersona.initialStats.totalQuestsCompleted,
-            },
-            equippedTitle: selectedPersona.equippedTitle,
-            equippedBorder: selectedPersona.equippedBorder,
-            avatarIndex: selectedPersona.avatarIndex,
-            userPreferences: {
-              habits,
-              note,
-              difficulty,
-            },
-            totalAttendanceDays: selectedPersona.initialStreak > 0 ? selectedPersona.initialStreak : 1,
-          },
-        };
-        
-      if (serverResponse?.success && serverResponse.data) {
-        setQuests([]);
-        setSession({
-          ...serverResponse.data,
-          lastActivityAt: new Date().toISOString(),
-          personaData: {
-            ...serverResponse.data.personaData,
-            userPreferences: {
-              habits,
-              note,
-              difficulty,
-            },
-          },
-        });
-      } else {
-        throw new Error(serverResponse?.error?.message || '서버 세션 생성에 실패했습니다.');
-      }
+      setQuests([]);
+      setSession({
+        ...response.data,
+        lastActivityAt: new Date().toISOString(),
+        personaData: {
+          ...response.data.personaData,
+          userPreferences: { habits, note, difficulty },
+        },
+      });
       navigate('/home');
     } catch (error) {
-      setSessionError(error instanceof Error ? error.message : '세션 생성에 실패했습니다.');
+      if (isAxiosError(error)) {
+        setSessionError(error.response?.status === 429
+          ? '지금 시작 요청이 많아요. 잠시 후 다시 시도해 주세요.'
+          : '서버 세션을 시작하지 못했어요. 잠시 후 다시 시도해 주세요.');
+      } else {
+        setSessionError(error instanceof Error ? error.message : '세션 생성에 실패했습니다.');
+      }
     } finally {
       setIsGenerating(false);
     }
@@ -133,24 +68,28 @@ export const PersonaSelectionPage: React.FC = () => {
   if (!selectedPersona) return <PersonaSelector onPersonaSelected={handlePersonaSelected} />;
 
   return (
-    <div className="h-screen overflow-y-scroll overscroll-y-contain bg-gray-50 dark:bg-gray-950 text-black dark:text-white px-6 py-10 pb-32">
+    <div className="hq-onboarding hq-preferences min-h-screen px-5 py-9 pb-32">
       <div className="max-w-md mx-auto space-y-6 pb-8">
-        <button onClick={() => setSelectedPersona(null)} className="text-sm text-gray-500 hover:text-blue-500">← 페르소나 다시 선택</button>
+        <button onClick={() => setSelectedPersona(null)} className="hq-text-button">← 페르소나 다시 선택</button>
         <div>
-          <p className="text-sm text-blue-500 font-semibold mb-2">{selectedPersona.name}와 함께 시작하기</p>
+          <p className="hq-eyebrow">{selectedPersona.name}와 함께 시작하기</p>
           <h1 className="text-3xl font-bold">어떤 습관을 만들까요?</h1>
-          <p className="text-sm text-gray-500 dark:text-gray-400 mt-2">선택한 목표와 답변을 바탕으로 오늘의 퀘스트를 다르게 만들어요.</p>
+          <p className="hq-activity-caption mt-2">선택한 목표와 답변을 바탕으로 오늘의 퀘스트를 다르게 만들어요.</p>
         </div>
 
         <section className="space-y-3">
           <h2 className="font-semibold">관심 있는 습관을 모두 골라주세요</h2>
           <div className="grid grid-cols-2 gap-3">
             {habitOptions.map((habit) => (
-              <button key={habit} onClick={() => toggleHabit(habit)} className={`p-3 rounded-xl border text-sm text-left transition-all ${habits.includes(habit) ? 'border-blue-500 bg-blue-500/10 text-blue-500' : 'border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900'}`}>
+              <button key={habit} disabled={isGenerating || !habits.includes(habit) && habits.length >= 8} onClick={() => toggleHabit(habit)} className="hq-choice-chip text-left" aria-pressed={habits.includes(habit)}>
                 {habits.includes(habit) ? '✓ ' : ''}{habit}
               </button>
             ))}
           </div>
+          <form className="hq-custom-habit" onSubmit={(event) => { event.preventDefault(); const name = customHabit.trim(); if (!name || habits.length >= 8 || habitOptions.some((habit) => habit.toLowerCase() === name.toLowerCase())) return; setExtraHabits((current) => [...current, name]); setHabits((current) => [...current, name]); setCustomHabit(''); }}>
+            <label htmlFor="custom-habit-name">직접 습관 추가</label><div><input id="custom-habit-name" maxLength={80} value={customHabit} disabled={isGenerating} onChange={(event) => setCustomHabit(event.target.value)} placeholder="예: 영어 공부" /><button type="submit" className="hq-choice-chip" disabled={isGenerating || !customHabit.trim() || habits.length >= 8 || habitOptions.some((habit) => habit.toLowerCase() === customHabit.trim().toLowerCase())}>추가</button></div>
+          </form>
+          <p className="hq-activity-caption">최대 8개 · 처음에는 매일 실천으로 시작해요. 시작 후 내 프로필에서 요일과 주간 목표를 바꿀 수 있어요.</p>
         </section>
 
         <section className="space-y-3">
@@ -162,12 +101,12 @@ export const PersonaSelectionPage: React.FC = () => {
           <h2 className="font-semibold">오늘의 난이도</h2>
           <div className="grid grid-cols-3 gap-2">
             {([['easy', '가볍게'], ['normal', '적당히'], ['hard', '도전적으로']] as const).map(([value, label]) => (
-              <button key={value} onClick={() => setDifficulty(value)} className={`py-2 rounded-xl border text-sm ${difficulty === value ? 'border-blue-500 bg-blue-500/10 text-blue-500' : 'border-gray-200 dark:border-gray-800'}`}>{label}</button>
+              <button key={value} onClick={() => setDifficulty(value)} className="hq-choice-chip" aria-pressed={difficulty === value}>{label}</button>
             ))}
           </div>
         </section>
 
-        <div className="fixed bottom-0 left-0 right-0 z-50 border-t border-gray-200 dark:border-gray-800 bg-gray-50/95 dark:bg-gray-950/95 px-6 pt-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] backdrop-blur-md shadow-[0_-8px_24px_rgba(0,0,0,0.08)]">
+        <div className="hq-preferences-footer fixed bottom-0 left-0 right-0 z-50 border-t px-6 pt-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] backdrop-blur-md shadow-[0_-8px_24px_rgba(0,0,0,0.08)]">
           <div className="max-w-md mx-auto">
           {sessionError && <p role="alert" className="text-sm text-red-600 mb-3">{sessionError}</p>}
           {habits.length > 0 && (
@@ -180,7 +119,7 @@ export const PersonaSelectionPage: React.FC = () => {
             disabled={habits.length === 0 || isGenerating}
             className="w-full rounded-xl bg-blue-500 hover:bg-blue-600 disabled:bg-gray-300 dark:disabled:bg-gray-800 disabled:text-gray-500 text-white py-3.5 font-bold shadow-lg transition-all active:scale-[0.99]"
           >
-            {isGenerating ? 'AI가 맞춤 퀘스트를 만드는 중...' : '선택 완료하고 메인 화면으로 이동'}
+            {isGenerating ? 'AI가 맞춤 퀘스트를 만드는 중...' : '페르소나로 시작'}
           </button>
           {habits.length === 0 && (
             <p className="text-xs text-center text-gray-400 mt-2">먼저 습관을 하나 이상 선택하세요.</p>

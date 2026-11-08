@@ -2,6 +2,7 @@ import { BadRequestException, Injectable } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { PrismaService } from '@/prisma/prisma.service';
 import { COSMETICS, DAY_MILESTONES } from '@/common/game-catalog';
+import { createInitialHabits } from '@/habit/habit.service';
 
 type ReportQuest = Prisma.DailyQuestGetPayload<{ include: { category: true; completionLog: true } }>;
 
@@ -16,20 +17,110 @@ const shiftDate = (date: string, amount: number) => {
   return next.toISOString().slice(0, 10);
 };
 
+function hasSmallJpegFrame(bytes: Buffer) {
+  for (let offset = 2; offset + 4 < bytes.length;) {
+    if (bytes[offset++] !== 0xff) return false;
+    while (bytes[offset] === 0xff) offset++;
+    const marker = bytes[offset++];
+    if (marker === 0xda || marker === 0xd9 || offset + 2 > bytes.length) return false;
+    const length = bytes.readUInt16BE(offset);
+    if (length < 2 || offset + length > bytes.length) return false;
+    if (marker === 0xc0 || marker === 0xc2) {
+      if (length < 8) return false;
+      const height = bytes.readUInt16BE(offset + 3);
+      const width = bytes.readUInt16BE(offset + 5);
+      return height > 0 && width > 0 && height <= 512 && width <= 512;
+    }
+    offset += length;
+  }
+  return false;
+}
+
 @Injectable()
 export class ActivityService {
   constructor(private readonly prisma: PrismaService) {}
 
+  async getPhoto(userId: string) {
+    const photo = await this.prisma.profilePhoto.findUnique({ where: { userId } });
+    return { jpeg: photo?.jpeg ?? null };
+  }
+
+  async savePhoto(userId: string, jpeg: string | null) {
+    if (jpeg !== null) {
+      const bytes = Buffer.from(jpeg, 'base64');
+      if (jpeg !== bytes.toString('base64') || bytes.length < 5 || bytes.length > 60_000 ||
+          bytes[0] !== 255 || bytes[1] !== 216 || bytes[2] !== 255 ||
+          bytes.at(-2) !== 255 || bytes.at(-1) !== 217 || !hasSmallJpegFrame(bytes)) {
+        throw new BadRequestException('60 KB 이하의 JPEG 프로필 사진을 선택해 주세요.');
+      }
+    }
+
+    return this.prisma.$transaction(async (tx) => {
+      await tx.user.update({ where: { id: userId }, data: { ...(jpeg !== null ? { specialAvatarId: null } : {}), updatedAt: new Date() } });
+      if (jpeg === null) await tx.profilePhoto.deleteMany({ where: { userId } });
+      else await tx.profilePhoto.upsert({ where: { userId }, create: { userId, jpeg }, update: { jpeg } });
+      return { jpeg };
+    });
+  }
+
   updatePreferences(userId: string, input: { habits: string[]; note: string; difficulty: string }) {
-    return this.prisma.user.update({ where: { id: userId }, data: { habits: [...new Set(input.habits.map((habit) => habit.trim()).filter(Boolean))], note: input.note.trim(), preferredDifficulty: input.difficulty } });
+    const names = [...new Set(input.habits.map((habit) => habit.trim()).filter(Boolean))];
+    return this.prisma.$transaction(async (tx) => {
+      const user = await tx.user.update({ where: { id: userId }, data: { habits: names, note: input.note.trim(), preferredDifficulty: input.difficulty } });
+      const existing = await tx.userHabit.findMany({ where: { userId } });
+      await createInitialHabits(tx, userId, names.filter((name) => !existing.some((habit) => habit.name === name && !habit.archived)), kstDate());
+      await tx.userHabit.updateMany({ where: { userId, archived: false, name: { notIn: names } }, data: { archived: true } });
+      return user;
+    });
   }
 
   updateReminder(userId: string, input: { enabled: boolean; time: string }) {
     return this.prisma.user.update({ where: { id: userId }, data: { reminderEnabled: input.enabled, reminderTime: input.time } });
   }
 
+  updateQuestPreferences(userId: string, input: { note: string; difficulty: string }) {
+    return this.prisma.user.update({ where: { id: userId }, data: { note: input.note.trim(), preferredDifficulty: input.difficulty } });
+  }
+
   private achievedDates(userId: string, db: PrismaService | Prisma.TransactionClient = this.prisma) {
     return db.dailyQuest.groupBy({ by: ['questDateKst'], where: { userId, status: 'completed', questDateKst: { lte: kstDate() } } });
+  }
+
+  async getActivityOverview(userId: string, now = new Date()) {
+    const today = kstDate(now);
+    const start = shiftDate(today, -29);
+    const quests = await this.prisma.dailyQuest.findMany({
+      where: { userId, questDateKst: { gte: start, lte: today } },
+      select: { questDateKst: true, status: true, category: { select: { name: true } } },
+    });
+    const days = Array.from({ length: 30 }, (_, index) => ({
+      date: shiftDate(start, index), total: 0, completed: 0,
+    }));
+    const byDate = new Map(days.map((day) => [day.date, day]));
+    const categories = new Map<string, number>();
+    for (const quest of quests) {
+      const day = byDate.get(quest.questDateKst);
+      if (!day) continue;
+      day.total++;
+      if (quest.status === 'completed') {
+        day.completed++;
+        const name = quest.category.name;
+        categories.set(name, (categories.get(name) ?? 0) + 1);
+      }
+    }
+    const summarize = (period: typeof days) => {
+      const total = period.reduce((sum, day) => sum + day.total, 0);
+      const completed = period.reduce((sum, day) => sum + day.completed, 0);
+      return { total, completed, rate: total ? Math.round(completed / total * 100) : null };
+    };
+    const [top] = [...categories].sort(([a, aCount], [b, bCount]) => bCount - aCount || a.localeCompare(b, 'ko'));
+    return {
+      today,
+      days,
+      last7: summarize(days.slice(-7)),
+      last30: summarize(days),
+      topCategory: top ? { name: top[0], completed: top[1] } : null,
+    };
   }
 
   async getCalendar(userId: string, month: string) {
@@ -45,13 +136,19 @@ export class ActivityService {
     ]);
     const today = kstDate();
     const claimed = new Set(claims.map((entry) => entry.days));
+    const questsByDate = new Map<string, typeof quests>();
+    for (const quest of quests) {
+      const bucket = questsByDate.get(quest.questDateKst) ?? [];
+      bucket.push(quest);
+      questsByDate.set(quest.questDateKst, bucket);
+    }
     return {
       month,
       today,
       achievedDays: achieved.length,
       days: Array.from({ length: dayCount }, (_, index) => {
         const date = `${month}-${String(index + 1).padStart(2, '0')}`;
-        const dayQuests = quests.filter((quest) => quest.questDateKst === date);
+        const dayQuests = questsByDate.get(date) ?? [];
         const completed = dayQuests.filter((quest) => quest.status === 'completed').length;
         const status = date > today ? 'future' : completed > 0 ? 'achieved' : dayQuests.length === 0 ? 'empty' : date === today ? 'pending' : 'missed';
         return { date, completed, total: dayQuests.length, status, quests: dayQuests };

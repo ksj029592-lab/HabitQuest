@@ -10,8 +10,8 @@ export class PrismaService extends PrismaClient implements OnModuleInit, OnModul
     try {
       await this.$connect();
       console.log('✅ Database connected');
-    } catch (error) {
-      console.warn('⚠️ Database unavailable; running with API fallbacks', error);
+    } catch {
+      console.warn('Database connection unavailable at startup');
     }
   }
 

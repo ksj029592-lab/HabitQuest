@@ -36,9 +36,11 @@ export class EnsureDailyQuestsDto extends RerollQuestsDto {
 }
 
 export class QuestResponseDto {
+  habitId?: string;
   id: string;
   userId: string;
   categoryId: string;
+  categoryName?: string;
   questDateKst: string;
   difficulty: string;
   title: string;
@@ -48,6 +50,8 @@ export class QuestResponseDto {
   goldReward: number;
   rankingPointReward: number;
   rankingPointAwarded?: number;
+  rewardAdjustments?: Array<'daily_gold_cap' | 'daily_point_cap' | 'repeated_category'>;
+  levelUp?: number;
   verificationQuestion?: string;
   verificationAnswer?: string;
   verificationFeedback?: string;

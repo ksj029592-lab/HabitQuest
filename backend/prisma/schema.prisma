@@ -50,6 +50,7 @@ model User {
   equippedTitle   String?
   equippedBorder  String?
   equippedDecoration String?
+  equippedBackground String?
   specialAvatarId String?
   avatarIndex     Int      @default(0)
   reminderEnabled Boolean  @default(false)
@@ -67,9 +68,39 @@ model User {
   rewards         SeasonRewardLog[]
   levelRewards    LevelRewardClaim[]
   dayRewards      DayRewardClaim[]
+  photo           ProfilePhoto?
+  managedHabits   UserHabit[]
   
   @@unique([personaId, id])
   @@map("users")
+}
+
+model ProfilePhoto {
+  userId String @id
+  jpeg   String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("profile_photos")
+}
+
+// Stable identity survives renaming and archiving. Schedule versions are append-only.
+model UserHabit {
+  id              String   @id @default(cuid())
+  userId          String
+  legacyName      String?
+  name            String
+  description     String   @default("")
+  note            String   @default("")
+  archived        Boolean  @default(false)
+  scheduleHistory Json
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+  user            User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  quests          DailyQuest[]
+
+  @@unique([userId, legacyName])
+  @@index([userId, archived])
+  @@map("user_habits")
 }
 
 // 습관 카테고리
@@ -89,6 +120,8 @@ model DailyQuest {
   id              String   @id @default(cuid())
   userId          String
   categoryId      String
+  habitId         String?
+  habitSnapshot   Json?
   questDateKst    String   // YYYY-MM-DD format, KST
   difficulty      String   // 'easy' | 'normal' | 'hard'
   title           String
@@ -106,10 +139,12 @@ model DailyQuest {
   
   user            User     @relation(fields: [userId], references: [id], onDelete: Cascade)
   category        HabitCategory @relation(fields: [categoryId], references: [id])
+  habit           UserHabit? @relation(fields: [habitId], references: [id], onDelete: SetNull)
   completionLog   QuestCompletionLog[]
   
   @@unique([userId, questDateKst, slotNo])
   @@index([userId, questDateKst])
+  @@index([habitId, questDateKst])
   @@map("daily_quests")
 }
 

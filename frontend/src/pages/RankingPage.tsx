@@ -1,269 +1,105 @@
-/**
- * 랭킹 페이지 (AvatarFrame 및 내 캐릭터 실시간 연동)
- */
-import React, { useState, useEffect } from 'react';
+import { useEffect, useState } from 'react';
+import { isAxiosError } from 'axios';
 import { useNavigate } from 'react-router-dom';
-import { Header, AvatarFrame } from '@components';
+import { CalendarDays, Medal } from 'lucide-react';
+import { AvatarFrame, Button, Header } from '@components';
 import { useSessionStore } from '@store';
-import { rankingApi } from '@api';
-import { Award, ChartNoAxesCombined, CheckCheck, Flame, Medal, Trophy } from 'lucide-react';
+import { rankingApi, SeasonPeriod, SeasonRankingEntry, SeasonReward } from '../api/ranking';
 
-interface PersonaRanking {
-  id: string;
-  name: string;
-  level: number;
-  score: number;
-  totalQuestsCompleted: number;
-  currentStreak: number;
-  bestStreak: number;
-  monthlySuccessRate: number;
-  gold: number;
-  equippedTitle: string | null;
-  equippedBorder: string | null;
-  equippedDecoration: string | null;
-  avatarIndex: number;
-  avatarUrl?: string | null;
-  specialAvatarId?: string | null;
-  isCurrent?: boolean;
-}
+import { Nameplate } from '../components/AchievementCollection';
+import { SeasonResults } from '../components/SeasonResults';
+import { FieldIcon, TrailSketch } from '../components/FieldArt';
 
-const PERSONA_RANKINGS: PersonaRanking[] = [
-  {
-    id: 'beginner',
-    name: '새로운 도전',
-    level: 1,
-    score: 0,
-    totalQuestsCompleted: 0,
-    currentStreak: 0,
-    bestStreak: 0,
-    monthlySuccessRate: 0,
-    gold: 0,
-    equippedTitle: null,
-    equippedBorder: null,
-    equippedDecoration: null,
-    avatarIndex: 0,
-  },
-  {
-    id: 'active',
-    name: '꾸준한 참여자',
-    level: 15,
-    score: 0,
-    totalQuestsCompleted: 156,
-    currentStreak: 23,
-    bestStreak: 45,
-    monthlySuccessRate: 85,
-    gold: 2500,
-    equippedTitle: '부지런한',
-    equippedBorder: '금색 테두리',
-    equippedDecoration: null,
-    avatarIndex: 2,
-  },
-  {
-    id: 'advanced',
-    name: '전설의 퀘스터',
-    level: 45,
-    score: 0,
-    totalQuestsCompleted: 1203,
-    currentStreak: 89,
-    bestStreak: 120,
-    monthlySuccessRate: 95,
-    gold: 8000,
-    equippedTitle: '전설의',
-    equippedBorder: '무지개 테두리',
-    equippedDecoration: null,
-    avatarIndex: 4,
-  },
+const examples: SeasonRankingEntry[] = [
+  { userId: 'demo-advanced', name: '전설의 퀘스터', level: 45, points: 540, rank: 1, avatarIndex: 4, equippedBorder: 'rainbow_ring' },
+  { userId: 'demo-active', name: '꾸준한 참여자', level: 15, points: 320, rank: 2, avatarIndex: 2, equippedBorder: 'gold_frame' },
+  { userId: 'demo-beginner', name: '새로운 도전', level: 1, points: 75, rank: 3, avatarIndex: 0 },
 ];
 
-const calculateSeasonScore = (persona: PersonaRanking, seasonRankingPoints = 0) =>
-  persona.level * 100 +
-  persona.totalQuestsCompleted * 10 +
-  persona.bestStreak * 5 +
-  persona.currentStreak * 2 +
-  seasonRankingPoints;
+const seasonDate = new Intl.DateTimeFormat('ko-KR', { month: 'long', day: 'numeric', timeZone: 'Asia/Seoul' });
 
-export const RankingPage: React.FC = () => {
+export function RankingPage() {
   const navigate = useNavigate();
   const session = useSessionStore((state) => state.session);
-  const [rankings, setRankings] = useState<PersonaRanking[]>([]);
-  const [expandedPersona, setExpandedPersona] = useState<string | null>(null);
+  const clearSession = useSessionStore((state) => state.clearSession);
+  const sessionId = session?.sessionId;
+  const demo = !sessionId || sessionId.startsWith('session_');
+  const [entries, setEntries] = useState<SeasonRankingEntry[]>([]);
+  const [period, setPeriod] = useState<SeasonPeriod>();
+  const [state, setState] = useState<'loading' | 'ready' | 'error' | 'expired'>('loading');
+  const [rewards, setRewards] = useState<SeasonReward[] | null>(null);
+  const [rewardsFailed, setRewardsFailed] = useState(false);
+  const [rewardsLoading, setRewardsLoading] = useState(false);
+  const [attempt, setAttempt] = useState(0);
 
   useEffect(() => {
-    let allRankers = PERSONA_RANKINGS.map((persona) => ({ ...persona }));
+    if (demo) return;
+    let ignore = false;
+    setState('loading');
+    setEntries([]);
+    setPeriod(undefined);
+    void rankingApi.getCurrentSeasonRanking().then((result) => {
+      if (!result.success || !result.data) throw new Error('Ranking unavailable');
+      if (!ignore) { setEntries(result.data); setPeriod(result.season); setState('ready'); }
+    }).catch((failure) => {
+      if (!ignore) setState(isAxiosError(failure) && failure.response?.status === 401 ? 'expired' : 'error');
+    });
+    return () => { ignore = true; };
+  }, [demo, sessionId, attempt]);
 
-    if (session && session.personaData) {
-      const p = session.personaData;
-      const currentPersonaRanking: PersonaRanking = {
-        ...(PERSONA_RANKINGS.find((persona) => persona.id === session.personaId) || PERSONA_RANKINGS[0]),
-        name: p.persona?.name || '나의 페르소나',
-        level: p.level || 1,
-        totalQuestsCompleted: p.stats?.totalQuestsCompleted || 0,
-        currentStreak: p.streak?.currentStreak || 0,
-        bestStreak: p.streak?.bestStreak || 0,
-        monthlySuccessRate: p.stats?.monthlySuccessRate || 0,
-        gold: p.gold || 0,
-        equippedTitle: p.equippedTitle || null,
-        equippedBorder: p.equippedBorder || null,
-        equippedDecoration: p.equippedDecoration || null,
-        avatarIndex: p.avatarIndex || 0,
-        avatarUrl: p.avatarUrl || null,
-        specialAvatarId: p.specialAvatarId || null,
-        isCurrent: true,
-        score: 0,
-      };
+  const loadRewards = async () => {
+    if (rewardsLoading) return;
+    setRewardsLoading(true);
+    setRewardsFailed(false);
+    try {
+      const result = await rankingApi.getRewards();
+      if (!result.success || !result.data) throw new Error();
+      setRewards(result.data);
+    } catch { setRewardsFailed(true); }
+    finally { setRewardsLoading(false); }
+  };
 
-      allRankers = allRankers.map((persona) =>
-        persona.id === currentPersonaRanking.id ? currentPersonaRanking : persona
-      );
-    }
-
-    const loadRanking = async () => {
-      try {
-        const response = await rankingApi.getCurrentSeasonRanking();
-        if (response.success && response.data?.length) {
-          const serverRankings = response.data.map((entry) => ({
-            ...PERSONA_RANKINGS.find((persona) => persona.id === entry.personaId),
-            id: entry.personaId || entry.userId,
-            name: entry.name,
-            level: entry.level,
-            score: entry.points,
-            isCurrent: entry.userId === session?.personaData.userId,
-            totalQuestsCompleted: 0,
-            currentStreak: 0,
-            bestStreak: 0,
-            monthlySuccessRate: 0,
-            gold: 0,
-            equippedTitle: null,
-            equippedBorder: null,
-            equippedDecoration: null,
-            avatarIndex: 0,
-          } as PersonaRanking));
-          setRankings(serverRankings);
-          return;
-        }
-      } catch (error) {
-        console.error('Ranking API failed; using local ranking fallback:', error);
-      }
-
-      const withScores = allRankers.map((p) => ({
-        ...p,
-        score: calculateSeasonScore(p, p.isCurrent ? session?.personaData.seasonRankingPoints : 0),
-      }));
-      setRankings([...withScores].sort((a, b) => b.score - a.score));
-    };
-
-    loadRanking();
-  }, [session]);
+  const rows = demo ? examples : entries;
+  const me = !demo ? rows.find((entry) => entry.userId === session?.personaData.userId) : undefined;
+  const remaining = period ? new Date(period.endAt).getTime() - Date.now() : null;
 
   return (
-    <div className="hq-app flex flex-col">
-      {/* 헤더 */}
-      <Header
-        title="시즌 랭킹 순위표"
-        subtitle="전국 퀘스터들과 경쟁해 상위 랭킹에 도전하세요!"
-        onBackPress={() => navigate('/home')}
-      />
+    <div className="hq-app">
+      <Header title="HabitQuest" onBackPress={() => navigate('/home')} />
+      <main className="hq-ranking-page">
+        <section className="hq-quest-hero hq-ranking-hero">
+          <div className="hq-hero-copy">
+            <p className="hq-eyebrow">시즌 기록</p>
+            <h2>{period ? `${Number(period.yearMonth.slice(-2))}월 시즌 랭킹` : '시즌 랭킹'}</h2>
+            <p>{demo ? '미리보기 · 예시 순위와 점수' : '이번 시즌 동안 쌓은 퀘스트 점수로 순위를 확인해요.'}</p>
+            {period && <p className="hq-season-dates"><CalendarDays size={17} aria-hidden="true" />{seasonDate.format(new Date(period.startAt))} – {seasonDate.format(new Date(new Date(period.endAt).getTime() - 1))} KST <span>{remaining !== null && (remaining <= 0 ? '시즌 종료' : remaining < 86_400_000 ? '1일 미만 남음' : `약 ${Math.ceil(remaining / 86_400_000)}일 남음`)}</span></p>}
+          </div>
+          <TrailSketch /><FieldIcon name="flag" className="hq-ranking-trophy" size={53} />
+        </section>
 
-      {/* 랭킹 리스트 */}
-      <div className="hq-legacy flex-1 overflow-y-auto px-5 py-8 space-y-3 max-w-3xl mx-auto w-full pb-20">
-        {rankings.map((persona, index) => {
-          const isTop3 = index < 3;
-          const cardBg = persona.isCurrent
-            ? 'bg-gradient-to-r from-purple-900/60 via-indigo-900/50 to-slate-900/70 border-purple-400/50 shadow-purple-900/40'
-            : isTop3
-            ? 'bg-gradient-to-r from-slate-900/90 via-slate-900/80 to-slate-950/90 border-amber-400/30 shadow-xl'
-            : 'bg-white/5 border-white/10 hover:bg-white/10';
-
-          return (
-            <div key={persona.id} className="space-y-2">
-              <div
-                onClick={() =>
-                  setExpandedPersona(expandedPersona === persona.id ? null : persona.id)
-                }
-                className={`w-full rounded-2xl p-4 border backdrop-blur-xl transition-all duration-300 hover:scale-[1.01] active:scale-95 cursor-pointer shadow-lg ${cardBg}`}
-              >
-                <div className="flex items-center justify-between gap-3">
-                  {/* 순위 메달 & 아바타 오버레이 렌더링 */}
-                  <div className="flex items-center gap-3">
-                    <div className="w-8 flex justify-center shrink-0" aria-label={`${index + 1}위`}>
-                      {isTop3 ? <Medal size={28} strokeWidth={1.6} className={index === 0 ? 'text-amber-600' : index === 1 ? 'text-gray-500' : 'text-rose-700'} aria-hidden="true" /> : <span>{index + 1}</span>}
-                    </div>
-
-                    {/* 공통 AvatarFrame 컴포넌트로 프로필 사진, 테두리, 장식 시각적 통합 표현 */}
-                    <AvatarFrame
-                      avatarIndex={persona.avatarIndex}
-                      avatarUrl={persona.avatarUrl}
-                      specialAvatarId={persona.specialAvatarId}
-                      equippedBorder={persona.equippedBorder}
-                      equippedDecoration={persona.equippedDecoration}
-                      size="lg"
-                    />
-
-                    <div className="text-left">
-                      <div className="flex items-center gap-2">
-                        <span className="text-xs text-purple-300 font-extrabold">#{index + 1}위</span>
-                        {persona.isCurrent && (
-                          <span className="text-[10px] px-2 py-0.5 rounded-full bg-purple-500/40 text-purple-100 border border-purple-300 font-bold">
-                            ME
-                          </span>
-                        )}
-                      </div>
-                      <h3 className="text-base font-extrabold text-white flex items-center gap-1.5 mt-0.5">
-                        {persona.equippedTitle && (
-                          <span className="text-purple-300">{persona.equippedTitle}</span>
-                        )}
-                        {persona.name}
-                      </h3>
-                      <p className="text-xs text-slate-300 font-medium">
-                        Lv.{persona.level}
-                      </p>
-                    </div>
-                  </div>
-
-                  {/* 점수 & 펼침 버튼 */}
-                  <div className="text-right shrink-0">
-                    <div className="text-xl font-black bg-gradient-to-r from-yellow-300 via-amber-300 to-yellow-500 bg-clip-text text-transparent">
-                      {persona.score.toLocaleString()} P
-                    </div>
-                    <span className="text-[10px] text-slate-400">시즌 점수</span>
-                  </div>
-                </div>
-              </div>
-
-              {/* 상세 정보 펼침 모달/카드 */}
-              {expandedPersona === persona.id && (
-                <div className="bg-slate-900/90 rounded-2xl p-4 space-y-2 border border-white/10 text-xs shadow-2xl animate-fadeIn">
-                  <div className="grid grid-cols-2 gap-2 text-slate-300">
-                    <div className="bg-white/5 p-2 rounded-xl border border-white/10 flex justify-between">
-                      <span className="inline-flex items-center gap-1"><Flame size={14} aria-hidden="true" />현재 연속 출석:</span>
-                      <span className="font-bold text-orange-400">{persona.currentStreak}일</span>
-                    </div>
-                    <div className="bg-white/5 p-2 rounded-xl border border-white/10 flex justify-between">
-                      <span className="inline-flex items-center gap-1"><Award size={14} aria-hidden="true" />최고 연속 출석:</span>
-                      <span className="font-bold text-red-400">{persona.bestStreak}일</span>
-                    </div>
-                    <div className="bg-white/5 p-2 rounded-xl border border-white/10 flex justify-between">
-                      <span className="inline-flex items-center gap-1"><CheckCheck size={14} aria-hidden="true" />완료 퀘스트:</span>
-                      <span className="font-bold text-purple-300">{persona.totalQuestsCompleted}개</span>
-                    </div>
-                    <div className="bg-white/5 p-2 rounded-xl border border-white/10 flex justify-between">
-                      <span className="inline-flex items-center gap-1"><ChartNoAxesCombined size={14} aria-hidden="true" />월간 달성률:</span>
-                      <span className="font-bold text-emerald-400">{persona.monthlySuccessRate}%</span>
-                    </div>
-                  </div>
-                </div>
-              )}
-            </div>
-          );
-        })}
-      </div>
-
-      {/* 하단 점수 안내 바 */}
-      <div className="shrink-0 px-4 py-3 bg-slate-900/90 border-t border-white/10 text-center">
-        <p className="text-[11px] text-slate-400">
-          <Trophy size={14} className="inline-block mr-1" aria-hidden="true" /> 시즌 점수 계산 공식: (레벨 × 100) + (완료 퀘스트 × 10) + (최고연속 × 5) + (현재연속 × 2)
-        </p>
-      </div>
+        {!demo && state === 'ready' && <div className="hq-activity-highlight"><Medal size={22} aria-hidden="true" /><div><span>내 시즌 순위</span><strong>{me ? `${me.rank}위 · ${me.points.toLocaleString()} PT` : '이번 시즌 순위 기록이 없어요.'}</strong></div></div>}
+        {!demo && state === 'loading' && <p className="hq-activity-loading" role="status">시즌 랭킹을 불러오는 중이에요.</p>}
+        {!demo && state === 'ready' && !rows.length && <p className="hq-empty-state" role="status">이번 시즌에 아직 기록된 점수가 없어요.</p>}
+        {!demo && state === 'error' && <div className="hq-empty-state" role="alert"><h3>랭킹을 불러오지 못했어요.</h3><Button size="small" onClick={() => setAttempt((value) => value + 1)}>다시 시도</Button></div>}
+        {!demo && state === 'expired' && <div className="hq-empty-state" role="alert"><h3>세션이 만료됐어요.</h3><Button size="small" onClick={() => { clearSession(); navigate('/'); }}>페르소나 선택으로 돌아가기</Button></div>}
+        {!!rows.length && <ol className="hq-ranking-list" aria-label={demo ? '예시 순위' : '시즌 순위'}>
+          {rows.map((entry) => <li key={entry.userId} className={entry.userId === me?.userId ? 'is-current' : ''}>
+            <strong className="hq-ranking-place" aria-label={`${entry.rank}위`}>{String(entry.rank).padStart(2, '0')}</strong>
+            <AvatarFrame avatarIndex={entry.avatarIndex} equippedBorder={entry.equippedBorder} specialAvatarId={entry.specialAvatarId} equippedDecoration={entry.equippedDecoration} size="sm" />
+            <div className="hq-ranking-person"><strong><Nameplate name={entry.name} title={entry.equippedTitle}/> {entry.userId === me?.userId && <small>나</small>}</strong><span>Lv.{entry.level}{entry.equippedTitle && ` · ${entry.equippedTitle}`}</span></div>
+            <strong className="hq-ranking-score">{entry.points.toLocaleString()} <small>PT</small></strong>
+          </li>)}
+        </ol>}
+        {!demo && <SeasonResults />}
+        {!demo && <section className="hq-journey-card" aria-label="시즌 보상">
+          <h3>시즌 보상 기록</h3>
+          {rewards === null && <Button size="small" onClick={() => void loadRewards()} disabled={rewardsLoading}>{rewardsLoading ? '불러오는 중' : '내 시즌 보상 보기'}</Button>}
+          {rewardsFailed && <p role="alert">보상 기록을 불러오지 못했어요. 다시 시도해 주세요.</p>}
+          {rewards?.length === 0 && <p role="status">아직 지급된 시즌 보상이 없어요.</p>}
+          {!!rewards?.length && <ul>{rewards.map((reward) => <li key={reward.id}>{reward.month} · {reward.label}</li>)}</ul>}
+        </section>}
+        {!demo && <p className="hq-activity-caption">기본 점수는 쉬움 10점, 보통 20점, 어려움 30점입니다. 같은 카테고리의 세 번째 완료부터 20% 감산되며, 하루 최대 60점이 반영됩니다.</p>}
+      </main>
     </div>
   );
-};
+}

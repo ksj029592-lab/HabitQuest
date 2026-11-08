@@ -1,7 +1,8 @@
 /**
  * 페르소나 컨트롤러
  */
-import { Controller, Get, Post, Body, Headers, BadRequestException, InternalServerErrorException } from '@nestjs/common';
+import { Controller, Get, Post, Body, Headers, HttpException, InternalServerErrorException, UseInterceptors } from '@nestjs/common';
+import { SessionStartLimitInterceptor } from './session-start-limit.interceptor';
 import { Public } from '@/common/session.guard';
 import { ApiOperation, ApiResponse, ApiTags } from '@nestjs/swagger';
 import { PersonaService } from './persona.service';
@@ -39,16 +40,13 @@ export class PersonaController {
    */
   @Post('session/start')
   @Public()
+  @UseInterceptors(SessionStartLimitInterceptor)
   @ApiOperation({
     summary: '게임 세션 시작',
     description: '페르소나를 선택하고 새 세션을 시작합니다',
   })
   @ApiResponse({ status: 201, type: SessionResponseDto })
   async startSession(@Body() dto: CreateSessionDto) {
-    if (!dto.personaId) {
-      throw new BadRequestException('personaId는 필수입니다');
-    }
-
     try {
       const session = await this.personaService.createSession(dto);
       return {
@@ -56,6 +54,7 @@ export class PersonaController {
         data: session,
       };
     } catch (error) {
+      if (error instanceof HttpException) throw error;
       throw new InternalServerErrorException('세션 생성에 실패했습니다');
     }
   }

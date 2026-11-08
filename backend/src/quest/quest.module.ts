@@ -11,9 +11,10 @@ import { UserController } from './user.controller';
 import { ProgressionService } from './progression.service';
 import { ShopModule } from '@/shop/shop.module';
 import { ActivityService } from './activity.service';
+import { HabitModule } from '@/habit/habit.module';
 
 @Module({
-  imports: [PrismaModule, RankingModule, AiModule, ShopModule],
+  imports: [PrismaModule, RankingModule, AiModule, ShopModule, HabitModule],
   controllers: [QuestController, UserController],
   providers: [QuestService, ProgressionService, ActivityService],
   exports: [QuestService],

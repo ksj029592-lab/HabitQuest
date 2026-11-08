@@ -50,6 +50,7 @@ export interface PersonaGameState {
   equippedTitle?: string | null;
   equippedBorder?: string | null;
   equippedDecoration?: string | null;
+  equippedBackground?: string | null;
   userPreferences?: {
     habits: string[];
     note?: string;
@@ -99,6 +100,7 @@ export interface DailyQuest {
   id: string;
   userId: string;
   categoryId: string;
+  categoryName?: string;
   questDateKst: string; // YYYY-MM-DD
   difficulty: 'easy' | 'normal' | 'hard';
   title: string;
@@ -108,6 +110,8 @@ export interface DailyQuest {
   goldReward: number;
   rankingPointReward?: number;
   rankingPointAwarded?: number;
+  rewardAdjustments?: Array<'daily_gold_cap' | 'daily_point_cap' | 'repeated_category'>;
+  levelUp?: number;
   verificationQuestion?: string;
   verificationAnswer?: string;
   verificationFeedback?: string;

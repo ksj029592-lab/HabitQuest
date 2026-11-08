@@ -1,6 +1,7 @@
 /**
  * 메인 애플리케이션 모듈
  */
+import { AchievementModule } from './achievement/achievement.module';
 import { Module } from '@nestjs/common';
 import { APP_GUARD } from '@nestjs/core';
 import { SessionGuard } from '@/common/session.guard';
@@ -23,6 +24,7 @@ import { AppService } from './app.service';
     }),
     ScheduleModule.forRoot(),
     PrismaModule,
+    AchievementModule,
     PersonaModule,
     QuestModule,
     AiModule,

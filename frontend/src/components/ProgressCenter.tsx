@@ -6,8 +6,10 @@ import { questApi, userApi } from '@api';
 import { LevelTree } from '../api/user';
 import { AvatarFrame } from './AvatarFrame';
 import { Button } from './Button';
+import { ActivityOverviewPanel } from './ActivityOverviewPanel';
 import { CalendarPanel } from './CalendarPanel';
 import { WeeklyReportPanel } from './WeeklyReportPanel';
+import { HabitPanel } from './HabitPanel';
 
 export const ProgressCenter: React.FC<{ session: UserSession; onRefresh: () => Promise<void> }> = ({ session, onRefresh }) => {
   const [view, setView] = useState<'stats' | 'tree' | 'history' | 'calendar' | 'weekly'>('stats');
@@ -22,26 +24,30 @@ export const ProgressCenter: React.FC<{ session: UserSession; onRefresh: () => P
   const serverBacked = !session.sessionId.startsWith('session_');
 
   useEffect(() => {
+    if (view !== 'tree' && view !== 'history') return;
     let cancelled = false;
     setLoading(true);
     setError('');
     const load = async () => {
       try {
-        const [progress, records] = await Promise.all([
-          serverBacked ? userApi.getProgression() : userApi.getRewardCatalog(),
-          serverBacked ? questApi.getQuestHistory() : Promise.resolve({ success: true, data: [] as DailyQuest[] }),
-        ]);
-        if (!progress.success || !progress.data || !records.success) throw new Error('성장 기록을 불러오지 못했어요.');
-        if (!cancelled) { setTree(progress.data); setHistory(records.data || []); }
+        if (view === 'tree') {
+          const response = await (serverBacked ? userApi.getProgression() : userApi.getRewardCatalog());
+          if (!response.success || !response.data) throw new Error('레벨 트리를 불러오지 못했어요.');
+          if (!cancelled) setTree(response.data);
+        } else if (serverBacked) {
+          const response = await questApi.getQuestHistory();
+          if (!response.success || !response.data) throw new Error('성찰 기록을 불러오지 못했어요.');
+          if (!cancelled) setHistory(response.data);
+        }
       } catch (failure) {
-        if (!cancelled) setError(isAxiosError(failure) ? '서버 세션과 데이터베이스 연결을 확인해 주세요.' : failure instanceof Error ? failure.message : '기록 조회에 실패했습니다.');
+        if (!cancelled) setError(failure instanceof Error ? failure.message : '기록 조회에 실패했어요.');
       } finally {
         if (!cancelled) setLoading(false);
       }
     };
     void load();
     return () => { cancelled = true; };
-  }, [session.sessionId, session.personaData.level, attempt, serverBacked]);
+  }, [view, attempt, serverBacked]);
 
   const claim = async (level: number) => {
     if (busy.current || !serverBacked) return;
@@ -68,10 +74,9 @@ export const ProgressCenter: React.FC<{ session: UserSession; onRefresh: () => P
   const progress = tree ? Math.round(tree.totalExp % tree.expPerLevel / tree.expPerLevel * 100) : 0;
   return (
     <section className="hq-progress-center">
-      <p className="hq-eyebrow">MY GROWTH</p>
       <h2>나의 성장 기록</h2>
       <div className="hq-progress-tabs" aria-label="성장 기록 보기">
-        {([['stats', '활동 통계'], ['calendar', '달성 캘린더'], ['weekly', '주간 리포트'], ['tree', '레벨 트리'], ['history', '성찰 기록']] as const).map(([id, label]) => <button key={id} aria-pressed={view === id} onClick={() => setView(id)}>{label}</button>)}
+        {([['stats', '활동 통계'], ['calendar', '달성 캘린더'], ['weekly', '주간 리포트'], ['tree', '레벨 트리'], ['history', '성찰 기록']] as const).map(([id, label]) => <button key={id} aria-pressed={view === id} onClick={() => { setError(''); setMessage(''); setView(id); }}>{label}</button>)}
       </div>
       {!serverBacked && <p className="hq-session-notice">데모 세션 · 보상 수령 및 서버 기록 저장 불가</p>}
       {message && <p role="status" className="hq-progress-message">{message}</p>}
@@ -79,11 +84,9 @@ export const ProgressCenter: React.FC<{ session: UserSession; onRefresh: () => P
       {view === 'calendar' && <CalendarPanel serverBacked={serverBacked} onRefresh={onRefresh} />}
       {view === 'weekly' && <WeeklyReportPanel serverBacked={serverBacked} />}
 
-      {view === 'stats' && <div className="hq-progress-metrics">
-        <div><span>{serverBacked ? '이번 달 퀘스트 달성률' : '데모 달성률'}</span><strong>{data.stats.monthlySuccessRate}%</strong><small>{data.stats.thisMonthQuestsCompleted}개 완료</small></div>
-        <div><span>누적 완료 퀘스트</span><strong>{data.stats.totalQuestsCompleted}<small>개</small></strong></div>
-        <div><span>최고 연속 달성</span><strong>{data.streak.bestStreak}<small>일</small></strong></div>
-      </div>}
+      {view === 'stats' && (serverBacked
+        ? <><ActivityOverviewPanel totalCompleted={data.stats.totalQuestsCompleted} currentStreak={data.streak.currentStreak} /><HabitPanel /></>
+        : <p className="hq-session-notice">서버에 연결하면 실제 활동 기록을 볼 수 있어요.</p>)}
 
       {view === 'tree' && <>
         <div className="hq-tree-summary"><div><span>현재 레벨</span><strong>Lv.{serverBacked ? level : data.level}</strong></div><div><span>다음 레벨 경험치</span><progress max={100} value={progress} aria-label="다음 레벨 경험치" /><small>{progress}% · 레벨당 {tree?.expPerLevel || 300} XP</small></div></div>

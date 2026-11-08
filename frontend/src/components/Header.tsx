@@ -2,7 +2,9 @@
  * Glassmorphism 헤더 컴포넌트 (상단 콤팩트 사용자 정보 바 지원)
  */
 import React from 'react';
-import { ArrowLeft, CalendarCheck, Coins, Flame, Sprout, Trophy, Zap } from 'lucide-react';
+import { ArrowLeft, CalendarCheck, Coins, Flame, Trophy, Zap } from 'lucide-react';
+
+import { FieldIcon } from './FieldArt';
 
 export interface HeaderUserStats {
   level: number;
@@ -42,7 +44,7 @@ export const Header = React.forwardRef<HTMLDivElement, HeaderProps>(
                   <ArrowLeft size={18} />
                 </button>
               )}
-              <Sprout className="hq-brand-mark" size={30} aria-hidden="true" />
+              <FieldIcon name="compass" className="hq-brand-mark" size={29} />
               <div>
                 {title && (
                   <h1 className="hq-brand-title">

@@ -20,12 +20,29 @@ export interface ServerUserState {
   equippedTitle: string | null;
   equippedBorder: string | null;
   equippedDecoration: string | null;
+  equippedBackground?: string | null;
   specialAvatarId: string | null;
   userPreferences: NonNullable<PersonaGameState['userPreferences']>;
   seasonRankingPoints: number;
   todayChecked: boolean;
   reminderEnabled: boolean;
   reminderTime: string;
+}
+
+export interface ActivityDay {
+  date: string;
+  completed: number;
+  total: number;
+}
+
+type ActivityPeriod = { total: number; completed: number; rate: number | null };
+
+export interface ActivityOverview {
+  today: string;
+  days: ActivityDay[];
+  last7: ActivityPeriod;
+  last30: ActivityPeriod;
+  topCategory: { name: string; completed: number } | null;
 }
 
 export interface AchievementCalendar {
@@ -83,9 +100,14 @@ export const applyServerUserState = (server: ServerUserState) => {
 };
 
 export const userApi = {
+  getPhoto: (userId: string) => apiClient.get<{ jpeg: string | null }>('/users/me/avatar', { headers: { 'x-user-id': userId } }),
+  savePhoto: (userId: string, jpeg: string) => apiClient.post<{ jpeg: string | null }>('/users/me/avatar', { jpeg }, { headers: { 'x-user-id': userId } }),
+  removePhoto: (userId: string) => apiClient.post<{ jpeg: string | null }>('/users/me/avatar/remove', {}, { headers: { 'x-user-id': userId } }),
   updatePreferences: (input: NonNullable<PersonaGameState['userPreferences']>) => apiClient.post<NonNullable<PersonaGameState['userPreferences']>>('/users/me/preferences', { ...input, note: input.note || '' }),
+  updateQuestPreferences: (input: { note: string; difficulty: string }) => apiClient.post('/users/me/quest-preferences', input),
   updateReminder: (input: { enabled: boolean; time: string }) => apiClient.post<{ enabled: boolean; time: string }>('/users/me/reminders', input),
   checkReminder: () => apiClient.post<{ notify: boolean; pending?: number; date?: string }>('/users/me/reminders/check', {}),
+  getActivityOverview: () => apiClient.get<ActivityOverview>('/users/me/activity'),
   getCalendar: (month: string) => apiClient.get<AchievementCalendar>(`/users/me/calendar?month=${encodeURIComponent(month)}`),
   getWeeklyReport: (start?: string) => apiClient.get<WeeklyReport>(`/users/me/weekly-report${start ? `?start=${encodeURIComponent(start)}` : ''}`),
   claimDayReward: (days: number) => apiClient.post<{ days: number; gold: number; message: string }>(`/users/me/day-rewards/${days}/claim`),

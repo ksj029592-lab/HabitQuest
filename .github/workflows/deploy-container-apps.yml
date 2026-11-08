@@ -1,14 +1,19 @@
-name: Build and deploy HabitQuest containers
+name: Deploy HabitQuest to the existing URL
 
 on:
-  push:
-    branches:
-      - master
   workflow_dispatch:
+    inputs:
+      approved_sha:
+        description: Full approved SHA on master
+        required: true
+        type: string
 
 permissions:
-  id-token: write
   contents: read
+
+concurrency:
+  group: habitquest-production
+  cancel-in-progress: false
 
 env:
   RESOURCE_GROUP: rg-habitquest
@@ -16,19 +21,39 @@ env:
   ACR_LOGIN_SERVER: habitquestacr50887.azurecr.io
   FRONTEND_APP: habitquest-web-aca-50887
   BACKEND_APP: habitquest-api-aca-50887
-  BACKEND_URL: https://habitquest-api-aca-50887.whitegrass-9925aedb.koreacentral.azurecontainerapps.io
-
-concurrency:
-  group: habitquest-production
-  cancel-in-progress: false
+  WEB_FQDN: habitquest-web-aca-50887.whitegrass-9925aedb.koreacentral.azurecontainerapps.io
+  API_FQDN: habitquest-api-aca-50887.whitegrass-9925aedb.koreacentral.azurecontainerapps.io
 
 jobs:
-  build-and-deploy:
+  authorize-release:
+    if: github.ref == 'refs/heads/master'
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 2
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
+      - name: Match the manually approved commit to this run
+        env:
+          APPROVED_SHA: ${{ inputs.approved_sha }}
+        run: test "$APPROVED_SHA" = "$GITHUB_SHA"
+
+  verify:
+    needs: authorize-release
+    uses: ./.github/workflows/verify.yml
+
+  deploy:
+    needs: verify
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    permissions:
+      id-token: write
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build both release images
+        run: |
+          docker build --build-arg "APP_REVISION=$GITHUB_SHA" \
+            --tag "$ACR_LOGIN_SERVER/habitquest-backend:$GITHUB_SHA" ./backend
+          docker build --build-arg "APP_REVISION=$GITHUB_SHA" --build-arg VITE_API_BASE_URL=/api \
+            --tag "$ACR_LOGIN_SERVER/habitquest-frontend:$GITHUB_SHA" ./frontend
 
       - name: Azure login with OIDC
         uses: azure/login@v2
@@ -37,54 +62,76 @@ jobs:
           tenant-id: ${{ vars.AZURE_TENANT_ID }}
           subscription-id: ${{ vars.AZURE_SUBSCRIPTION_ID }}
 
-      - name: Login to Azure Container Registry
-        run: az acr login --name "$ACR_NAME"
-
-      - name: Build and push backend image
+      - name: Validate existing hosts and record rollback targets
         run: |
-          docker build \
-            --tag "$ACR_LOGIN_SERVER/habitquest-backend:${GITHUB_SHA}" \
-            ./backend
-          docker push "$ACR_LOGIN_SERVER/habitquest-backend:${GITHUB_SHA}"
+          record_current() {
+            local app="$1" host="$2" state ready image
+            state="$(az containerapp show -g "$RESOURCE_GROUP" -n "$app" \
+              --query '{host:properties.configuration.ingress.fqdn,mode:properties.configuration.activeRevisionsMode,ready:properties.latestReadyRevisionName}' -o json)"
+            jq -e --arg host "$host" '.host == $host and .mode == "Single" and (.ready | type == "string" and length > 0)' <<< "$state" >/dev/null
+            ready="$(jq -r .ready <<< "$state")"
+            image="$(az containerapp revision show -g "$RESOURCE_GROUP" -n "$app" --revision "$ready" \
+              --query 'properties.template.containers[0].image' -o tsv)"
+            test -n "$image"
+            printf '%s | %s | %s\n' "$app" "$ready" "$image" >> "$GITHUB_STEP_SUMMARY"
+          }
+          printf '### Previous ready revisions and rollback images\n\n' >> "$GITHUB_STEP_SUMMARY"
+          record_current "$BACKEND_APP" "$API_FQDN"
+          record_current "$FRONTEND_APP" "$WEB_FQDN"
 
-      - name: Build and push frontend image
+      - name: Push both release images to the existing registry
         run: |
-          docker build \
-            --build-arg VITE_API_BASE_URL=/api \
-            --tag "$ACR_LOGIN_SERVER/habitquest-frontend:${GITHUB_SHA}" \
-            ./frontend
-          docker push "$ACR_LOGIN_SERVER/habitquest-frontend:${GITHUB_SHA}"
+          az acr login --name "$ACR_NAME"
+          docker push "$ACR_LOGIN_SERVER/habitquest-backend:$GITHUB_SHA"
+          docker push "$ACR_LOGIN_SERVER/habitquest-frontend:$GITHUB_SHA"
 
-      - name: Deploy backend Container App
+      - name: Deploy to the existing apps and verify the served commit
         run: |
-          az containerapp update \
-            --resource-group "$RESOURCE_GROUP" \
-            --name "$BACKEND_APP" \
-            --image "$ACR_LOGIN_SERVER/habitquest-backend:${GITHUB_SHA}"
+          wait_for_revision() {
+            local app="$1" host="$2" image="$3" revision="$4" state health
+            for attempt in {1..40}; do
+              if state="$(az containerapp show -g "$RESOURCE_GROUP" -n "$app" \
+                  --query '{host:properties.configuration.ingress.fqdn,ready:properties.latestReadyRevisionName}' -o json)" &&
+                jq -e --arg host "$host" --arg revision "$revision" '.host == $host and .ready == $revision' <<< "$state" >/dev/null &&
+                health="$(az containerapp revision show -g "$RESOURCE_GROUP" -n "$app" --revision "$revision" \
+                  --query '{active:properties.active,health:properties.healthState,traffic:properties.trafficWeight,image:properties.template.containers[0].image}' -o json)" &&
+                jq -e --arg image "$image" '.active and .health == "Healthy" and .traffic == 100 and .image == $image' <<< "$health" >/dev/null; then
+                printf '%s is ready with 100%% traffic\n' "$revision"
+                return 0
+              fi
+              sleep 8
+            done
+            echo "::error::$app did not become ready on its existing host"
+            return 1
+          }
 
-      - name: Deploy frontend Container App
-        run: |
-          az containerapp update \
-            --resource-group "$RESOURCE_GROUP" \
-            --name "$FRONTEND_APP" \
-            --image "$ACR_LOGIN_SERVER/habitquest-frontend:${GITHUB_SHA}" \
-            --set-env-vars "BACKEND_URL=$BACKEND_URL"
+          update_image() {
+            local app="$1" host="$2" image="$3" suffix="$4"
+            az containerapp update -g "$RESOURCE_GROUP" -n "$app" --image "$image" --revision-suffix "$suffix" --output none
+            wait_for_revision "$app" "$host" "$image" "$app--$suffix"
+          }
 
-      - name: Verify revisions
-        run: |
-          az containerapp revision list \
-            --resource-group "$RESOURCE_GROUP" \
-            --name "$BACKEND_APP" \
-            --query "[?properties.active].{name:name,health:properties.healthState,traffic:properties.trafficWeight}" \
-            --output table
-          az containerapp revision list \
-            --resource-group "$RESOURCE_GROUP" \
-            --name "$FRONTEND_APP" \
-            --query "[?properties.active].{name:name,health:properties.healthState,traffic:properties.trafficWeight}" \
-            --output table
+          check_served_sha() {
+            local url="$1" require_db="$2" response
+            for attempt in {1..10}; do
+              if response="$(curl -fsS --max-time 12 -H 'Cache-Control: no-cache' "$url?revision=$GITHUB_SHA")" &&
+                jq -e --arg sha "$GITHUB_SHA" --arg db "$require_db" \
+                  '.revision == $sha and ($db == "no" or (.status == "ready" and .foundryConfigured == true))' <<< "$response" >/dev/null; then
+                return 0
+              fi
+              sleep 5
+            done
+            echo "::error::Expected revision or readiness check failed at $url"
+            return 1
+          }
 
-      - name: Smoke test public endpoints
-        run: |
-          curl --fail --silent --show-error "$BACKEND_URL/health"
-          curl --fail --silent --show-error "https://habitquest-web-aca-50887.whitegrass-9925aedb.koreacentral.azurecontainerapps.io/"
-          curl --fail --silent --show-error "https://habitquest-web-aca-50887.whitegrass-9925aedb.koreacentral.azurecontainerapps.io/api/health"
+          suffix="r-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+          update_image "$BACKEND_APP" "$API_FQDN" "$ACR_LOGIN_SERVER/habitquest-backend:$GITHUB_SHA" "$suffix"
+          check_served_sha "https://$API_FQDN/ready" yes
+          update_image "$FRONTEND_APP" "$WEB_FQDN" "$ACR_LOGIN_SERVER/habitquest-frontend:$GITHUB_SHA" "$suffix"
+          curl -fsS --max-time 15 -H 'Cache-Control: no-cache' "https://$WEB_FQDN/?revision=$GITHUB_SHA" >/dev/null
+          check_served_sha "https://$WEB_FQDN/version.json" no
+          check_served_sha "https://$WEB_FQDN/api/ready" yes
+          curl -fsS --max-time 15 "https://$WEB_FQDN/api/personas" |
+            jq -e '.success == true and ([.data[].role] | contains(["beginner", "active", "advanced"]))' >/dev/null
+          printf '\nVerified commit %s at https://%s/\n' "$GITHUB_SHA" "$WEB_FQDN" >> "$GITHUB_STEP_SUMMARY"

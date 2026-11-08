@@ -16,11 +16,11 @@ export const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
       'hq-button rounded-lg font-semibold transition-colors disabled:opacity-50 disabled:cursor-not-allowed border focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2';
 
     const variantStyles = {
-      primary: 'bg-teal-700 border-teal-700 text-white hover:bg-teal-800',
+      primary: 'hq-button-primary',
       secondary:
-        'bg-white text-gray-700 hover:bg-gray-50 border-gray-200',
+        'hq-button-secondary',
       destructive: 'bg-red-600 border-red-600 text-white hover:bg-red-700',
-      plain: 'text-teal-700 hover:bg-teal-50 border-transparent',
+      plain: 'hq-button-plain',
     };
 
     const sizeStyles = {
